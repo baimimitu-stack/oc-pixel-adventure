@@ -7,6 +7,7 @@ import { DiaryEntry, Memory } from "../services/memory";
 import { Affection } from "../services/affection";
 import { buildNpcDialoguePrompt } from "../services/npcPrompt";
 import { summarizeCompanion } from "../services/companionCard";
+import { pickPortrait } from "../services/expressionPortraits";
 import {
   getProceduralNPCReply,
   getProceduralRandomEvent,
@@ -520,11 +521,20 @@ export const StoryDialogueModal: React.FC<StoryDialogueModalProps> = ({
     { label: "抱胸", prefix: "（双手抱胸）" },
   ];
 
-  // Standing portrait character selection
+  // Standing portrait character selection —— 立绘按当前 mood 自动切换
   const isViewingNPC = portraitTarget === "npc";
+  // 当前情绪：拿"当前展示者"最新一条 mood；找不到就 undefined
+  const currentMood = (() => {
+    // OC 侧看 OC 最近说的一句 mood，NPC 侧看 NPC 最近说的一句 mood
+    const wanted = isViewingNPC ? "npc" : "player";
+    for (let i = dialogueHistory.length - 1; i >= 0; i--) {
+      if (dialogueHistory[i].sender === wanted) return dialogueHistory[i].mood;
+    }
+    return undefined;
+  })();
   const displayedPortraitUrl = isViewingNPC
-    ? currentNPC.portraitUrl
-    : (activeOC.portraitUrl || activeOC.avatarUrl);
+    ? pickPortrait(currentNPC.expressionPortraits, currentMood, currentNPC.portraitUrl)
+    : pickPortrait(activeOC.expressionPortraits, currentMood, activeOC.portraitUrl, activeOC.avatarUrl);
   const displayedCharacterName = isViewingNPC ? currentNPC.name : activeOC.name;
   const displayedCharacterRole = isViewingNPC ? currentNPC.role : (activeOC.title || "冒险勇者");
   const displayedCharacterPersonality = isViewingNPC ? currentNPC.personality : activeOC.personality;

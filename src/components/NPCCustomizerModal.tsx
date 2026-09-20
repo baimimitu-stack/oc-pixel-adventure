@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
-import { NPCConfig } from "../types";
+import { NPCConfig, ExpressionPortraitMap } from "../types";
 import { GameStorage } from "../services/db";
 import { sound } from "../services/sound";
 import { getLevelByWorld } from "../game/levels";
+import { ExpressionPortraitEditor } from "./ExpressionPortraitEditor";
+import { countExpressionPortraits } from "../services/expressionPortraits";
 import { 
   Edit3, 
   RotateCcw, 
@@ -64,6 +66,8 @@ export const NPCCustomizerModal: React.FC<NPCCustomizerModalProps> = ({
   const [portraitUrl, setPortraitUrl] = useState<string>(storedNPC.portraitUrl || "");
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [uploadError, setUploadError] = useState<string>("");
+  const [expressions, setExpressions] = useState<ExpressionPortraitMap>(storedNPC.expressionPortraits || {});
+  const [showExpressions, setShowExpressions] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -85,6 +89,7 @@ export const NPCCustomizerModal: React.FC<NPCCustomizerModalProps> = ({
     setDialogue(current.dialogue);
     setAvatarEmoji(current.avatarEmoji || "🧚");
     setPortraitUrl(current.portraitUrl || "");
+    setExpressions(current.expressionPortraits || {});
     setSaveSuccess(false);
     setUploadError("");
   };
@@ -164,6 +169,11 @@ export const NPCCustomizerModal: React.FC<NPCCustomizerModalProps> = ({
 
   const handleSave = () => {
     if (!name.trim()) return;
+    // 清理空槽后再存
+    const cleanedExpressions: ExpressionPortraitMap = {};
+    for (const [key, value] of Object.entries(expressions || {})) {
+      if (typeof value === "string" && value.trim()) cleanedExpressions[key as keyof ExpressionPortraitMap] = value;
+    }
     const updated: NPCConfig = {
       name: name.trim(),
       role: role.trim() || "旅途向导",
@@ -171,6 +181,7 @@ export const NPCCustomizerModal: React.FC<NPCCustomizerModalProps> = ({
       dialogue: dialogue.trim() || "愿星辉照亮你的路！",
       avatarEmoji,
       portraitUrl: portraitUrl.trim() || undefined,
+      expressionPortraits: Object.keys(cleanedExpressions).length ? cleanedExpressions : undefined,
     };
     GameStorage.saveNPCForWorld(selectedWorld, updated);
     sound.playStar();
@@ -195,6 +206,7 @@ export const NPCCustomizerModal: React.FC<NPCCustomizerModalProps> = ({
     setDialogue(def.dialogue);
     setAvatarEmoji(def.avatarEmoji || "🧚");
     setPortraitUrl("");
+    setExpressions({});
     sound.playClick();
     onRefreshData();
   };
@@ -445,6 +457,35 @@ export const NPCCustomizerModal: React.FC<NPCCustomizerModalProps> = ({
                 {preset.slice(0, 16)}...
               </button>
             ))}
+          </div>
+
+          {/* 表情立绘折叠面板 —— 世界 N 的 NPC */}
+          <div className="border-2 pixel-border-slate" style={{ background: "#fff1d6", borderColor: "#d1a86c" }}>
+            <button
+              type="button"
+              onClick={() => setShowExpressions((value) => !value)}
+              className="w-full flex items-center justify-between p-3 text-left"
+              style={{ color: "#3a2410" }}
+            >
+              <span className="text-xs font-pixel font-bold flex items-center gap-2" style={{ color: "#b45309" }}>
+                🎭 NPC 表情立绘（世界 {selectedWorld}）
+              </span>
+              <span className="text-[11px]" style={{ color: "#6b4a2b" }}>
+                已配置 {countExpressionPortraits(expressions)}/7 · 点击{showExpressions ? "收起" : "编辑"}
+              </span>
+            </button>
+            {showExpressions && (
+              <div className="p-3 pt-0">
+                <ExpressionPortraitEditor
+                  value={expressions}
+                  onChange={setExpressions}
+                  boxed={false}
+                />
+                <p className="text-[11px] mt-2" style={{ color: "#6b4a2b" }}>
+                  改动会在点击下方「保存当前 NPC 设定」时一并写入。
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

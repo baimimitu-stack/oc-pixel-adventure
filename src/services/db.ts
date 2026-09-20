@@ -652,6 +652,19 @@ export class GameStorage {
     }
   }
 
+  /** 更新指定 OC 的表情立绘表（key=ExpressionKey，value=base64 或空字符串） */
+  public static updateOCExpressionPortraits(ocId: string, portraits: Record<string, string | undefined>) {
+    const ocs = this.getOCs();
+    const target = ocs.find((o) => o.id === ocId);
+    if (!target) return;
+    const cleaned: Record<string, string> = {};
+    for (const [key, value] of Object.entries(portraits || {})) {
+      if (typeof value === "string" && value.trim()) cleaned[key] = value;
+    }
+    target.expressionPortraits = cleaned as OCCharacter["expressionPortraits"];
+    this.saveOCs(ocs);
+  }
+
   // ============================================================
   // 隐私工具 —— 一键抹除本地上传数据 / API Key / 全部本地数据
   // 上传的图片 (base64) 只在本机 localStorage，代码里的 fetch()

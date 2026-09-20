@@ -1,10 +1,26 @@
-export type PersonalityType = 
-  | "傲娇" 
-  | "热血勇者" 
-  | "温柔治愈" 
-  | "高冷机智" 
-  | "调皮捣蛋" 
+export type PersonalityType =
+  | "傲娇"
+  | "热血勇者"
+  | "温柔治愈"
+  | "高冷机智"
+  | "调皮捣蛋"
   | "呆萌天然";
+
+/** AI 输出的 expression 值集，也是表情立绘的槽位 key。 */
+export type ExpressionKey = "smile" | "excited" | "shy" | "surprised" | "cool" | "happy" | "grateful";
+
+export const EXPRESSION_LIST: { key: ExpressionKey; label: string; emoji: string; desc: string }[] = [
+  { key: "smile",     label: "微笑", emoji: "🙂", desc: "常态 / 默认情绪" },
+  { key: "excited",   label: "兴奋", emoji: "😆", desc: "高兴激动 / 燃起来" },
+  { key: "shy",       label: "害羞", emoji: "😳", desc: "不好意思 / 傲娇脸红" },
+  { key: "surprised", label: "惊讶", emoji: "😲", desc: "吃惊 / 意外" },
+  { key: "cool",      label: "酷酷", emoji: "😎", desc: "高冷 / 从容 / 淡定" },
+  { key: "happy",     label: "开心", emoji: "😊", desc: "平静愉悦 / 温柔" },
+  { key: "grateful",  label: "感激", emoji: "🙏", desc: "感谢 / 由衷回应" },
+];
+
+/** 每种表情对应的立绘（base64 data URL）。缺席的表情走 fallback（smile → 默认 portrait → 头像）。 */
+export type ExpressionPortraitMap = Partial<Record<ExpressionKey, string>>;
 
 export interface CosmeticItem {
   id: string;
@@ -123,6 +139,8 @@ export interface OCCharacter {
     pet?: string;
   };
   companionCard?: CompanionCard;
+  /** 按 mood 切换的立绘。AI 返 expression 后自动挑对应槽。 */
+  expressionPortraits?: ExpressionPortraitMap;
 }
 
 export interface Achievement {
@@ -207,6 +225,8 @@ export interface NPCConfig {
   dialogue: string;
   avatarEmoji: string;
   portraitUrl?: string; // Optional custom portrait art / 立绘
+  /** 按 mood 切换的立绘。AI 返 expression 后自动挑对应槽。 */
+  expressionPortraits?: ExpressionPortraitMap;
 }
 
 export type ApiProvider = "gemini" | "deepseek" | "openai_compatible";

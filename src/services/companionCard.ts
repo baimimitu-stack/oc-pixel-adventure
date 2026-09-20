@@ -329,3 +329,50 @@ export function downloadCompanion(oc: OCCharacter) {
   anchor.remove();
   URL.revokeObjectURL(url);
 }
+
+/** 生成一份空白 companion 角色卡模板，供用户离线填好后再上传。 */
+export function buildBlankCompanionCard(): CompanionCard {
+  const character = emptyCompanionCharacter({ name: "", identity: "", personality: "" });
+  const flattened = flattenToV3(character, { first_mes: "", mes_example: "" });
+  return {
+    spec: "chara_card_v3",
+    spec_version: "3.0",
+    data: {
+      name: "（请填角色名字）",
+      description: flattened.description || "（一句话介绍这位角色，比如身世 / 外貌 / 说话方式）",
+      personality: flattened.personality || "（性格标签或几句形容）",
+      scenario: flattened.scenario || "（TA 出场时的情境 / 与玩家的初次相遇）",
+      first_mes: "（TA 第一次开口对玩家说的话）",
+      mes_example: "（可选：一段示范对白，展示语气与说话节奏）",
+      creator_notes: "填写完成后回到游戏 → OC 工坊 → 导入 .companion.json 即可载入",
+      system_prompt: "",
+      post_history_instructions: "",
+      alternate_greetings: [],
+      tags: ["oc-pixel-adventure", "template"],
+      creator: "oc-pixel-adventure",
+      character_version: "1.0",
+      character_book: null,
+      assets: [],
+      extensions: {
+        companion: {
+          companion_id: `urn:uuid:${crypto.randomUUID()}`,
+          character,
+        },
+      },
+    },
+  };
+}
+
+/** 下载一份空白 companion 角色卡到 template.companion.json */
+export function downloadBlankCompanionTemplate() {
+  const blank = buildBlankCompanionCard();
+  const blob = new Blob([JSON.stringify(blank, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "template.companion.json";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}

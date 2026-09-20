@@ -5,12 +5,16 @@ import { sound } from "../services/sound";
 import {
   cardToOC,
   companionFileName,
+  downloadBlankCompanionTemplate,
   downloadCompanion,
   emptyCompanionCharacter,
   parseCompanionCard,
   toCompanionCard,
 } from "../services/companionCard";
 import { CompanionCardPanel } from "./CompanionCardPanel";
+import { ExpressionPortraitEditor } from "./ExpressionPortraitEditor";
+import { countExpressionPortraits } from "../services/expressionPortraits";
+import type { ExpressionPortraitMap } from "../types";
 import { 
   ShieldCheck, 
   Upload, 
@@ -87,6 +91,25 @@ export const OCStudio: React.FC<OCStudioProps> = ({
       ? JSON.parse(JSON.stringify(stored))
       : emptyCompanionCharacter({ name: activeOC.name, identity: activeOC.title, personality: activeOC.personality }));
   }, [activeOC.id, activeOC.companionCard]);
+
+  // 表情立绘（活跃 OC）—— 独立 draft，改完点保存才落库
+  const [showExpressions, setShowExpressions] = useState(false);
+  const [expressionsDraft, setExpressionsDraft] = useState<ExpressionPortraitMap>(activeOC.expressionPortraits || {});
+  const [expressionsDirty, setExpressionsDirty] = useState(false);
+  const [expressionsSaved, setExpressionsSaved] = useState(false);
+  useEffect(() => {
+    setExpressionsDraft(activeOC.expressionPortraits || {});
+    setExpressionsDirty(false);
+    setExpressionsSaved(false);
+  }, [activeOC.id, activeOC.expressionPortraits]);
+  const saveExpressions = () => {
+    GameStorage.updateOCExpressionPortraits(activeOC.id, expressionsDraft);
+    setExpressionsDirty(false);
+    setExpressionsSaved(true);
+    setTimeout(() => setExpressionsSaved(false), 2000);
+    sound.playStar();
+    onRefreshOCs();
+  };
 
   // 全局粘贴监听：创建中的 OC 表单打开时，Ctrl+V 直接把剪贴板图片贴进目标位
   useEffect(() => {
@@ -422,6 +445,13 @@ export const OCStudio: React.FC<OCStudioProps> = ({
                 <FileUp size={14} /> 导入角色卡
                 <input ref={companionInputRef} type="file" accept=".json,.companion.json,application/json" onChange={importCompanionCard} className="hidden" />
               </label>
+              <button
+                onClick={() => { downloadBlankCompanionTemplate(); sound.playClick(); }}
+                className="pixel-btn-amber flex items-center gap-1 px-3 py-2 text-xs"
+                title="下载一份空白 .companion.json 模板，可以离线填好再上传"
+              >
+                <Download size={14} /> 空白模板
+              </button>
             </div>
           </div>
 
@@ -446,6 +476,45 @@ export const OCStudio: React.FC<OCStudioProps> = ({
             onChange={setCompanionDraft}
             onSave={saveCompanionToActive}
           />
+
+          {/* 表情立绘编辑（活跃 OC） */}
+          <div className="border-2 pixel-border-slate" style={{ background: "#fff1d6", borderColor: "#d1a86c" }}>
+            <button
+              type="button"
+              onClick={() => setShowExpressions((value) => !value)}
+              className="w-full flex items-center justify-between p-3 text-left"
+              style={{ color: "#3a2410" }}
+            >
+              <span className="text-xs font-pixel font-bold flex items-center gap-2" style={{ color: "#b45309" }}>
+                🎭 表情立绘（活跃 OC：{activeOC.name}）
+              </span>
+              <span className="text-[11px]" style={{ color: "#6b4a2b" }}>
+                已配置 {countExpressionPortraits(activeOC.expressionPortraits)}/7 · 点开{showExpressions ? "收起" : "编辑"}
+              </span>
+            </button>
+            {showExpressions && (
+              <div className="p-3 pt-0 space-y-3">
+                <ExpressionPortraitEditor
+                  value={expressionsDraft}
+                  onChange={(next) => { setExpressionsDraft(next); setExpressionsDirty(true); }}
+                  boxed={false}
+                />
+                <div className="flex items-center justify-end gap-2">
+                  {expressionsSaved && (
+                    <span className="text-xs font-pixel" style={{ color: "#15803d" }}>✓ 已保存</span>
+                  )}
+                  <button
+                    type="button"
+                    disabled={!expressionsDirty}
+                    onClick={saveExpressions}
+                    className="pixel-btn-green px-4 py-2 text-xs font-pixel font-bold disabled:opacity-40"
+                  >
+                    保存到 {activeOC.name}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Create New OC Form Drawer */}
           {isCreating && (
