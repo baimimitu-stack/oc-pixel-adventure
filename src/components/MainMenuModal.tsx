@@ -168,7 +168,7 @@ export const MainMenuModal: React.FC<MainMenuModalProps> = ({
   };
 
   const handleNewGameConfirm = () => {
-    if (window.confirm("确定开始新游戏吗？这将会重置当前关卡与探险数据（原有已保存的存档槽位不受影响）。")) {
+    if (window.confirm("确定开始新游戏吗？\n\n会清空：当前关卡进度、金币、星星、成就、NPC 好感度、NPC 记忆日记（所有世界）。\n不会影响：3 个存档槽位、你的 OC 角色和上传的立绘、API 配置。")) {
       GameStorage.resetNewGame();
       sound.playStar();
       onNewGame();

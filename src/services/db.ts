@@ -1,5 +1,6 @@
 import { OCCharacter, CosmeticItem, Achievement, NPCConfig, SaveSlotData, ApiConfig } from "../types";
 import { Affection } from "./affection";
+import { MEMORY_KEY } from "./memory";
 
 // SVG Data URIs for cute preset pixel OCs
 const SHIBA_HERO_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
@@ -547,6 +548,8 @@ export class GameStorage {
       currentWorld,
       customNPCs: this.getCustomNPCs(),
       npcAffection: Affection.getAll(),
+      // 存下当时的 NPC×OC 记忆（日记 + 永久记忆）。整块字符串塞进去，不解析。
+      memory: localStorage.getItem(MEMORY_KEY) || "",
     };
 
     localStorage.setItem(`oc_game_save_slot_snapshot_${slotId}`, JSON.stringify(fullSnapshot));
@@ -569,6 +572,11 @@ export class GameStorage {
       if (typeof snapshot.currentWorld === "number") localStorage.setItem(STORAGE_KEYS.CURRENT_WORLD, snapshot.currentWorld.toString());
       if (snapshot.customNPCs) localStorage.setItem(STORAGE_KEYS.CUSTOM_NPCS, JSON.stringify(snapshot.customNPCs));
       if (snapshot.npcAffection) Affection.replaceAll(snapshot.npcAffection);
+      // 记忆：老存档（还没这个字段）就跳过，新存档回填
+      if (typeof snapshot.memory === "string") {
+        if (snapshot.memory) localStorage.setItem(MEMORY_KEY, snapshot.memory);
+        else localStorage.removeItem(MEMORY_KEY);
+      }
       return true;
     } catch (e) {
       console.error("Failed to load save slot:", e);
@@ -589,8 +597,9 @@ export class GameStorage {
     localStorage.setItem(STORAGE_KEYS.TOTAL_STARS, "0");
     localStorage.setItem(STORAGE_KEYS.CURRENT_WORLD, "1");
     localStorage.setItem(STORAGE_KEYS.ACHIEVEMENTS, JSON.stringify(INITIAL_ACHIEVEMENTS));
-    // Reset per-NPC affection (independent of OC) and OC stats
+    // 关系归零：好感清、NPC 记忆日记全清（新游戏从零关系开始）
     Affection.clear();
+    localStorage.removeItem(MEMORY_KEY);
     const ocs = this.getOCs();
     if (ocs.length > 0) {
       ocs[0].affection = 10; // legacy field, no longer used by dialogue
