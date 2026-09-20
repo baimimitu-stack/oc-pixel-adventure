@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { SaveSlotData, ApiConfig, ApiProvider } from "../types";
 import { GameStorage } from "../services/db";
 import { sound } from "../services/sound";
-import { callAI } from "../services/aiClient";
+import { callAIVerbose } from "../services/aiClient";
 import { MemoryLibrary } from "./MemoryLibrary";
 import { 
   Play, 
@@ -234,7 +234,7 @@ export const MainMenuModal: React.FC<MainMenuModalProps> = ({
     }
 
     try {
-      const raw = await callAI({
+      const result = await callAIVerbose({
         prompt: "请回复一句简短的像素冒险欢迎语（15字以内）。",
         isJson: false,
         provider,
@@ -243,24 +243,29 @@ export const MainMenuModal: React.FC<MainMenuModalProps> = ({
         model: apiConfig.model,
       });
 
-      if (raw && raw.trim()) {
+      if (result.text && result.text.trim()) {
         sound.playStar();
         const updated: ApiConfig = { ...apiConfig, status: "connected" };
         setApiConfig(updated);
         GameStorage.saveApiConfig(updated);
         setApiTestResult({
           success: true,
-          message: "API 握手成功！连接正常。",
-          sample: raw.trim().slice(0, 60),
+          message: `握手成功（HTTP ${result.status ?? 200}）。`,
+          sample: result.text.trim().slice(0, 60),
         });
       } else {
         sound.playHit();
         const updated: ApiConfig = { ...apiConfig, status: "error" };
         setApiConfig(updated);
         GameStorage.saveApiConfig(updated);
+        const parts = [
+          result.error || "AI 没有返回内容。",
+          result.url ? `请求 URL：${result.url}` : "",
+          result.snippet ? `返回体片段：${result.snippet}` : "",
+        ].filter(Boolean);
         setApiTestResult({
           success: false,
-          message: "AI 没有返回内容。请检查 API Key / baseUrl / 模型名 / 网络（可能被 CORS 拦或需要代理）。",
+          message: parts.join(" · "),
         });
       }
     } catch (err: any) {
