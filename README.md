@@ -1,48 +1,38 @@
 # 🎮 像素冒险物语 (OC Pixel Adventure)
 
-React 19 + TypeScript + Tailwind 4 + Vite 的**纯静态 SPA** 横版闯关 + AVG 文游游戏。
+> 一个纯静态 SPA 的横版像素闯关 + 文字对话游戏。自定义原创角色、上传立绘、跟 NPC AI 聊天，全在浏览器里跑。
 
-## 🆕 v0.4 亮点
+## 🎯 在线试玩
 
-- **完全无后端**：整个游戏就是一个 `dist/` 静态目录，扔到任意 nginx / OSS / Cloudflare Pages / Vercel 都能跑
-- **AI 由玩家浏览器直连**：Gemini / DeepSeek / OpenAI 兼容三家都通吃，站长不承担任何 AI 费用、看不到玩家的对白和 Key
+**👉 [https://game.mimitu.top](https://game.mimitu.top)**
+
+浏览器直接打开就能玩，无需下载。想让 NPC 对话更智能就在游戏内"API 接口"tab 填自己的 Gemini / DeepSeek / OpenAI 兼容 Key，不填也能玩（走内置离线台词模板）。
+
+![gameplay](docs/screenshots/gameplay.png)
+
+---
+
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)
+![Tailwind](https://img.shields.io/badge/Tailwind-4.0-06B6D4?logo=tailwindcss&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?logo=vite&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Static SPA](https://img.shields.io/badge/Backend-None-brightgreen)
+
+---
+
+## ✨ 亮点
+
+- **完全无后端**：整个游戏就是一个 `dist/` 静态目录，扔到任意 nginx / Caddy / OSS / CF Pages / Vercel 都能跑
+- **AI 由玩家浏览器直连**：Gemini / DeepSeek / OpenAI 兼容三家通吃，站长不承担任何 AI 费用、看不到玩家对白和 Key
+- **横版像素闯关**：4 个主题世界（草原/蘑菇/星夜/熔岩），二段跳、蹲滑、弹簧、金币、星星、Boss NPC
+- **OC 工坊**：自建原创角色、上传头像 & 全身立绘（支持 Ctrl+V 剪贴板粘贴、拖拽上传）
+- **NPC 定制**：给每个世界的 NPC 换名字、性格、初始台词、立绘
+- **文游 AVG 对话**：右侧立绘展示、好感度羁绊系统、剧情分支选项 + 自由打字 + 情绪前缀
 - **画面亮化**：奶油米 + 桃粉 + 天空蓝，告别原来的深紫黑
-- **上传门槛低**：OC 头像 / 立绘 / NPC 立绘支持点击 / 拖拽 / Ctrl+V 三种方式
 - **隐私中心**：明确告知图片和 Key 只存本机 localStorage，提供一键抹除
 
-## 🚀 本地开发
-
-前提：机器上有 Node.js (v18+)，或者用项目里 `RUN.bat` 里指向的便携版。
-
-```bash
-npm install
-npm run dev
-# 浏览器打开 http://localhost:3000
-```
-
-Windows 用户可以直接双击 `RUN.bat`。
-
-## 📦 打包上线
-
-```bash
-npm run build
-# 产物在 dist/
-```
-
-或双击 `BUILD.bat`。把整个 `dist/` 目录传到服务器就好。
-
-## 🌐 部署到自己的域名
-
-详细步骤见 [`deploy/DEPLOY.md`](deploy/DEPLOY.md)，nginx 配置模板见 [`deploy/nginx-site.conf`](deploy/nginx-site.conf)。
-
-大致流程（假设你 VPS + 域名 `mimitu.top` 齐全）：
-1. 本地 `BUILD.bat` 产出 `dist/`
-2. DNS 加 A 记录 `game.mimitu.top → VPS 公网 IP`
-3. `scp -r dist/* user@vps:/var/www/oc-pixel-adventure/`
-4. VPS 上装 nginx + certbot，用模板配置站点
-5. 打开 `https://game.mimitu.top` 开玩
-
-## 🤖 AI 服务商配置
+## 🤖 支持的 AI 服务商
 
 主菜单 → **API 接口**，玩家自己填：
 
@@ -53,6 +43,48 @@ npm run build
 | 🔌 OpenAI 兼容 | 自填（OpenRouter / OneAPI / 硅基流动 / 自建） | 自填 | 看端点 |
 
 不填 Key 也能玩，NPC 会用内置的离线台词模板。
+
+## 🚀 本地跑
+
+前提：Node.js v18+。
+
+```bash
+git clone https://github.com/baimimitu-stack/oc-pixel-adventure.git
+cd oc-pixel-adventure
+npm install
+npm run dev
+# 浏览器打开 http://localhost:3000
+```
+
+Windows 用户可直接双击 `RUN.bat`（内部指向便携版 Node）。
+
+## 📦 打包上线
+
+```bash
+npm run build
+# 产物在 dist/
+```
+
+或双击 `BUILD.bat`。把整个 `dist/` 目录传到任意静态服务器即可。
+
+## 🌐 部署到自己的域名
+
+详细步骤见 [`deploy/DEPLOY.md`](deploy/DEPLOY.md)，nginx 配置模板见 [`deploy/nginx-site.conf`](deploy/nginx-site.conf)。
+
+本站 `game.mimitu.top` 用的是 **Caddy + 反代**，因为服务器上已有其他 Caddy 服务，Caddyfile 追加一段就行：
+
+```caddy
+game.mimitu.top {
+    encode gzip zstd
+    root * /var/www/oc-pixel-adventure
+    try_files {path} /index.html
+    file_server
+    @assets path /assets/*
+    header @assets Cache-Control "public, max-age=2592000, immutable"
+}
+```
+
+Caddy 会自动申请免费 Let's Encrypt SSL 证书。
 
 ## 📁 项目结构
 
@@ -90,3 +122,7 @@ deploy/
 - AI 请求体只含文字（角色名、性格、玩家输入），**从不含图片**
 - 玩家 API Key 只在本机 localStorage
 - 主菜单 → 隐私中心提供一键抹除
+
+## 📄 License
+
+MIT
