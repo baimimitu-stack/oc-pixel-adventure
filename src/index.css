@@ -1,0 +1,243 @@
+@import "tailwindcss";
+
+/* ========================================================
+   明亮像素主题 —— 从原来的近黑 slate-950 全面调亮
+   主色系：奶油白 / 天空蓝 / 蜜桃粉 / 阳光黄
+   仍保留复古像素凸出边框，只是把明度整体提升
+   ======================================================== */
+
+:root {
+  --pixel-bg: #fff7ec;        /* 主背景：奶油米色 */
+  --pixel-panel: #fff1d6;     /* 面板：淡蜜黄 */
+  --pixel-panel-2: #ffe4b5;   /* 面板 2：更暖一点的杏色 */
+  --pixel-ink: #3a2410;       /* 深棕当文字色（比纯黑柔和） */
+  --pixel-ink-2: #6b4a2b;
+  --pixel-line: #d1a86c;      /* 描边棕金色 */
+  --pixel-sky: #cfe8ff;       /* 天空浅蓝 */
+  --pixel-sky-2: #ffd6e0;     /* 天空粉尾 */
+  --pixel-grass: #86e07c;
+}
+
+body {
+  background:
+    radial-gradient(1200px 800px at 15% 0%, #ffe1a6 0%, transparent 55%),
+    radial-gradient(1200px 800px at 85% 0%, #cfe8ff 0%, transparent 55%),
+    linear-gradient(180deg, #fff7ec 0%, #ffe8d1 100%) !important;
+  color: var(--pixel-ink);
+}
+
+@layer utilities {
+  .font-pixel {
+    font-family: 'Press Start 2P', 'DotGothic16', 'ZCOOL KuaiLe', monospace, sans-serif;
+  }
+
+  /* 明亮版凸边（金色系保留，但内芯改成亮米色） */
+  .pixel-border-gold {
+    box-shadow:
+      0 -3px 0 0 #fde047,
+      0 3px 0 0 #b45309,
+      -3px 0 0 0 #fde047,
+      3px 0 0 0 #b45309,
+      0 0 0 3px #3a2410;
+  }
+
+  .pixel-border-indigo {
+    box-shadow:
+      0 -3px 0 0 #a5b4fc,
+      0 3px 0 0 #4338ca,
+      -3px 0 0 0 #a5b4fc,
+      3px 0 0 0 #4338ca,
+      0 0 0 3px #1e1b4b;
+  }
+
+  /* 原本极深的 slate 边框改成暖棕木框 —— 保留像素凸感但不再压抑 */
+  .pixel-border-slate {
+    box-shadow:
+      0 -3px 0 0 #f9d8a6,
+      0 3px 0 0 #a3703c,
+      -3px 0 0 0 #f9d8a6,
+      3px 0 0 0 #a3703c,
+      0 0 0 3px #3a2410;
+  }
+
+  .pixel-border-green {
+    box-shadow:
+      0 -3px 0 0 #bbf7d0,
+      0 3px 0 0 #15803d,
+      -3px 0 0 0 #bbf7d0,
+      3px 0 0 0 #15803d,
+      0 0 0 3px #052e16;
+  }
+
+  .pixel-border-blue {
+    box-shadow:
+      0 -3px 0 0 #bae6fd,
+      0 3px 0 0 #075985,
+      -3px 0 0 0 #bae6fd,
+      3px 0 0 0 #075985,
+      0 0 0 3px #082f49;
+  }
+
+  /* 3D 立体按钮 —— 全部亮化 */
+  .pixel-btn-amber {
+    background-color: #fbbf24;
+    border-top: 3px solid #fef9c3;
+    border-left: 3px solid #fef9c3;
+    border-right: 3px solid #92400e;
+    border-bottom: 3px solid #92400e;
+    outline: 2px solid #3a2410;
+    image-rendering: pixelated;
+    color: #3a2410;
+  }
+  .pixel-btn-amber:active {
+    border-top: 3px solid #92400e;
+    border-left: 3px solid #92400e;
+    border-right: 3px solid #fef9c3;
+    border-bottom: 3px solid #fef9c3;
+    transform: translate(2px, 2px);
+  }
+
+  /* 原本深灰 slate 按钮 → 木质奶白按钮 */
+  .pixel-btn-slate {
+    background-color: #fff2d6;
+    border-top: 3px solid #ffffff;
+    border-left: 3px solid #ffffff;
+    border-right: 3px solid #a3703c;
+    border-bottom: 3px solid #a3703c;
+    outline: 2px solid #3a2410;
+    color: #3a2410;
+  }
+  .pixel-btn-slate:active {
+    border-top: 3px solid #a3703c;
+    border-left: 3px solid #a3703c;
+    border-right: 3px solid #ffffff;
+    border-bottom: 3px solid #ffffff;
+    transform: translate(2px, 2px);
+  }
+
+  .pixel-btn-blue {
+    background-color: #38bdf8;
+    border-top: 3px solid #e0f2fe;
+    border-left: 3px solid #e0f2fe;
+    border-right: 3px solid #075985;
+    border-bottom: 3px solid #075985;
+    outline: 2px solid #0c4a6e;
+    color: #082f49;
+  }
+  .pixel-btn-blue:active {
+    border-top: 3px solid #075985;
+    border-left: 3px solid #075985;
+    border-right: 3px solid #e0f2fe;
+    border-bottom: 3px solid #e0f2fe;
+    transform: translate(2px, 2px);
+  }
+
+  .pixel-btn-green {
+    background-color: #4ade80;
+    border-top: 3px solid #dcfce7;
+    border-left: 3px solid #dcfce7;
+    border-right: 3px solid #14532d;
+    border-bottom: 3px solid #14532d;
+    outline: 2px solid #052e16;
+    color: #052e16;
+  }
+  .pixel-btn-green:active {
+    border-top: 3px solid #14532d;
+    border-left: 3px solid #14532d;
+    border-right: 3px solid #dcfce7;
+    border-bottom: 3px solid #dcfce7;
+    transform: translate(2px, 2px);
+  }
+
+  /* 面板：原来是深蓝夜空，改成暖蜜色织纹 */
+  .pixel-panel {
+    background-color: #fff1d6;
+    background-image: radial-gradient(#ffd58a 15%, transparent 16%);
+    background-size: 8px 8px;
+    border: 3px solid #d1a86c;
+    box-shadow:
+      inset -3px -3px 0px 0px rgba(163, 112, 60, 0.35),
+      inset 3px 3px 0px 0px rgba(255, 255, 255, 0.8);
+    color: var(--pixel-ink);
+  }
+
+  /* 强调色文字：仍然保留 amber/rose 的高饱和 */
+  .ink { color: var(--pixel-ink); }
+  .ink-soft { color: var(--pixel-ink-2); }
+
+  /* 明亮的语义化背景类，替换全屏 bg-slate-950 用 */
+  .bg-sunny {
+    background:
+      radial-gradient(1200px 800px at 15% 0%, #ffe1a6 0%, transparent 55%),
+      radial-gradient(1200px 800px at 85% 0%, #cfe8ff 0%, transparent 55%),
+      linear-gradient(180deg, #fff7ec 0%, #ffe8d1 100%);
+  }
+
+  /* 淡化原本压得很暗的 slate 大色块，避免全局出现"黑漆漆" */
+  .bg-slate-950,
+  .bg-slate-950\/85,
+  .bg-slate-950\/90,
+  .bg-slate-950\/80,
+  .bg-slate-950\/70,
+  .bg-slate-950\/60 {
+    background-color: rgba(255, 247, 236, 0.94) !important;
+    color: var(--pixel-ink);
+  }
+  .bg-slate-900,
+  .bg-slate-900\/90,
+  .bg-slate-900\/80,
+  .bg-slate-900\/70 {
+    background-color: #fff1d6 !important;
+    color: var(--pixel-ink);
+  }
+  .bg-slate-800,
+  .bg-slate-800\/90,
+  .bg-slate-800\/70 {
+    background-color: #ffe4b5 !important;
+    color: var(--pixel-ink);
+  }
+
+  /* 文字色兜底：把 slate 系文字全部改成暖棕，避免奶白底上还是浅灰不好读 */
+  .text-slate-100, .text-slate-200, .text-slate-300, .text-slate-400 {
+    color: var(--pixel-ink) !important;
+  }
+  .text-slate-500, .text-slate-600, .text-slate-700 {
+    color: var(--pixel-ink-2) !important;
+  }
+  /* 高亮的琥珀色文字在浅背景不够醒目 → 换成更深的棕金 */
+  .text-amber-300, .text-amber-400 {
+    color: #b45309 !important;
+  }
+  .text-amber-200 { color: #92400e !important; }
+  .text-sky-300, .text-sky-400 { color: #0284c7 !important; }
+  .text-emerald-300, .text-emerald-400 { color: #15803d !important; }
+  .text-rose-300, .text-rose-400 { color: #be123c !important; }
+  .text-purple-300, .text-purple-400 { color: #7c3aed !important; }
+}
+
+/* 亮色系滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #fff1d6;
+  border-left: 2px solid #f9d8a6;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #f59e0b;
+  border: 2px solid #b45309;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #fbbf24;
+}
+
+/* 淡入动画 */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fade-in 0.24s ease-out; }

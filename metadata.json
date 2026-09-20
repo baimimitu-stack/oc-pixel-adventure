@@ -1,0 +1,6 @@
+{
+  "name": "OC Pixel Adventure",
+  "description": "本地离线保护的原创角色(OC)像素冒险横版闯关游戏，支持角色吃金币升级外观、收集星星解锁地图、剧情互动与好感度系统。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
