@@ -476,7 +476,11 @@ export default function App() {
       {showNPCCustomizer && (
         <NPCCustomizerModal
           currentWorld={currentWorld}
-          onRefreshData={refreshData}
+          onRefreshData={() => {
+            // 保存 NPC 后要让 currentLevelConfig 重算，否则对话窗口里还是旧 NPC
+            refreshData();
+            setLoadRevision((value) => value + 1);
+          }}
           onBackToMainMenu={() => {
             setShowNPCCustomizer(false);
             setShowMainMenu(true);
