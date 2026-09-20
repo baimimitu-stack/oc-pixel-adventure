@@ -216,68 +216,19 @@ body {
 }
 
 /* ========================================================
-   AVG 对话舞台作用域覆盖 —— 保留原深色沉浸感
-   全局亮化把 slate 系背景/文字都换掉了，但对话框设计上就是
-   "深色底 + 浅色字"的 VN 风格，把它单独还原
+   AVG 对话舞台 —— 跟主菜单统一浅色亮化风格
+   核心：让对话主体里的浅色字（amber-50 / amber-100）在浅底上变深
    ======================================================== */
 
-.story-vn-scope .bg-slate-950,
-.story-vn-scope .bg-slate-950\/85,
-.story-vn-scope .bg-slate-950\/90,
-.story-vn-scope .bg-slate-950\/80,
-.story-vn-scope .bg-slate-950\/70,
-.story-vn-scope .bg-slate-950\/60 {
-  background-color: rgba(15, 23, 42, 0.94) !important;
-  color: #e2e8f0 !important;
+/* 台词主体：浅色背景上的浅黄字要变深棕，否则看不见 */
+.story-vn-scope .text-amber-50,
+.story-vn-scope .text-amber-100 {
+  color: #3a2410 !important;
 }
-.story-vn-scope .bg-slate-900,
-.story-vn-scope .bg-slate-900\/95,
-.story-vn-scope .bg-slate-900\/90,
-.story-vn-scope .bg-slate-900\/80,
-.story-vn-scope .bg-slate-900\/70,
-.story-vn-scope .bg-slate-900\/60,
-.story-vn-scope .bg-slate-900\/50 {
-  background-color: #1e293b !important;
-  color: #e2e8f0 !important;
-}
-.story-vn-scope .bg-slate-800,
-.story-vn-scope .bg-slate-800\/90,
-.story-vn-scope .bg-slate-800\/80,
-.story-vn-scope .bg-slate-800\/70,
-.story-vn-scope .bg-slate-800\/50 {
-  background-color: #334155 !important;
-  color: #e2e8f0 !important;
-}
-/* 文字色还原 */
-.story-vn-scope .text-slate-100 { color: #f1f5f9 !important; }
-.story-vn-scope .text-slate-200 { color: #e2e8f0 !important; }
-.story-vn-scope .text-slate-300 { color: #cbd5e1 !important; }
-.story-vn-scope .text-slate-400 { color: #94a3b8 !important; }
-.story-vn-scope .text-slate-500 { color: #64748b !important; }
-/* 琥珀色系还原 */
-.story-vn-scope .text-amber-100 { color: #fef3c7 !important; }
-.story-vn-scope .text-amber-200 { color: #fde68a !important; }
-.story-vn-scope .text-amber-300 { color: #fcd34d !important; }
-.story-vn-scope .text-amber-400 { color: #fbbf24 !important; }
-.story-vn-scope .text-amber-50 { color: #fffbeb !important; }
-/* 玫瑰/靛蓝/翠绿点缀色还原 */
-.story-vn-scope .text-rose-300 { color: #fda4af !important; }
-.story-vn-scope .text-rose-400 { color: #fb7185 !important; }
-.story-vn-scope .text-indigo-200 { color: #c7d2fe !important; }
-.story-vn-scope .text-indigo-300 { color: #a5b4fc !important; }
-.story-vn-scope .text-emerald-300 { color: #6ee7b7 !important; }
-.story-vn-scope .text-emerald-400 { color: #34d399 !important; }
-.story-vn-scope .text-purple-300 { color: #d8b4fe !important; }
-.story-vn-scope .text-sky-300 { color: #7dd3fc !important; }
-.story-vn-scope .text-sky-400 { color: #38bdf8 !important; }
-/* 这些深色主题下需要浅一点的边框强调，pixel-border-slate 保留木质凸感但外圈换回深色 */
-.story-vn-scope .pixel-border-slate {
-  box-shadow:
-    0 -3px 0 0 #64748b,
-    0 3px 0 0 #0f172a,
-    -3px 0 0 0 #64748b,
-    3px 0 0 0 #0f172a,
-    0 0 0 3px #020617;
+
+/* 装饰的日式引号「」保持金棕色，突出对话感 */
+.story-vn-scope .text-amber-400 {
+  color: #b45309 !important;
 }
 
 /* 亮色系滚动条 */

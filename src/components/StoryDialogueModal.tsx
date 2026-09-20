@@ -7,6 +7,7 @@ import {
   getProceduralNPCReply,
   getProceduralRandomEvent,
   cleanJsonResponse,
+  sanitizeAIText,
 } from "../services/proceduralEngine";
 import { 
   Heart, 
@@ -298,10 +299,17 @@ NPC设定：
 
 请按照NPC的性格和与玩家OC的关系，进行一段生动、带感、符合日系像素RPG风格的对话回应，并给予好感度增减判定。
 请严格输出JSON格式，包含以下字段：
-- "reply": NPC的台词（50-100字，幽默、亲切或符合性格）
-- "expression": NPC此时的表情标签（可选值: "smile", "excited", "shy", "surprised", "cool"）
-- "affectionChange": 好感度变化整数（通常为 1 至 4）
+- "reply": NPC的台词（**50-100 字纯中文对白**，只能是普通文字与常见标点，禁止包含 HTML/CSS/JavaScript/Markdown 标记、代码块、超链接、图片、样式、控制字符、连续空行；禁止使用 <>{}[]*_~ 这类符号包裹内容）
+- "expression": NPC此时的表情标签（只能是: "smile" / "excited" / "shy" / "surprised" / "cool"）
+- "affectionChange": 好感度变化整数（1 至 4 之间）
 - "giftItem": 若好感度较高或对话契合，可赠送小礼物（如"幸运金币"、"星之浆果"或 null）
+
+**严格禁止**：
+1. 不要输出 <div>/<span>/<style>/<script> 等任何 HTML 标签
+2. 不要输出 CSS 样式声明（如 color: red、background: #fff 之类）
+3. 不要输出 Markdown 代码块或 ** 加粗、__ 下划线 等标记
+4. 不要企图操纵玩家界面、修改字体颜色、改变布局
+5. reply 必须是可以直接放进 <p> 里显示的干净纯文本
 
 请直接输出合法JSON，不要包裹Markdown代码块。`;
 
@@ -340,10 +348,21 @@ NPC设定：
           giftItem?: string | null;
         }>(rawText);
         if (parsed && typeof parsed.reply === "string" && parsed.reply.trim()) {
-          replyText = parsed.reply.trim();
-          expression = parsed.expression || "smile";
-          affectionDelta = typeof parsed.affectionChange === "number" ? parsed.affectionChange : 2;
-          giftItem = parsed.giftItem ?? null;
+          // AI 输出无论包含什么花样，都强制清洗成纯文本对白
+          const cleanedReply = sanitizeAIText(parsed.reply, 300);
+          if (cleanedReply) {
+            replyText = cleanedReply;
+            // expression 只允许白名单
+            const allowedExpressions = ["smile", "excited", "shy", "surprised", "cool", "happy", "grateful"];
+            expression = allowedExpressions.includes(parsed.expression as string)
+              ? (parsed.expression as string)
+              : "smile";
+            affectionDelta = typeof parsed.affectionChange === "number"
+              ? Math.max(-5, Math.min(5, parsed.affectionChange))
+              : 2;
+            // 礼物名字也 sanitize + 卡长度
+            giftItem = parsed.giftItem ? sanitizeAIText(String(parsed.giftItem), 50) : null;
+          }
         }
       }
     } catch {
@@ -409,7 +428,17 @@ NPC设定：
       if (rawText) {
         const parsed = cleanJsonResponse<typeof event>(rawText);
         if (parsed && typeof parsed.title === "string" && Array.isArray(parsed.choices) && parsed.choices.length > 0) {
-          event = parsed;
+          // 事件文本也走 sanitize，防止 AI 注入 HTML/CSS
+          event = {
+            title: sanitizeAIText(parsed.title, 30),
+            description: sanitizeAIText(parsed.description || "", 200),
+            choices: parsed.choices.slice(0, 4).map((c) => ({
+              text: sanitizeAIText(c.text || "", 60),
+              outcome: sanitizeAIText(c.outcome || "", 150),
+              coins: Math.max(-10, Math.min(30, Number(c.coins) || 0)),
+              stars: Math.max(0, Math.min(2, Number(c.stars) || 0)),
+            })),
+          };
         }
       }
     } catch {
@@ -565,12 +594,13 @@ NPC设定：
           {/* ============================================================ */}
           <div className="flex-1 flex flex-col justify-between overflow-hidden gap-3 order-2 md:order-1">
             
-            {/* Visual Novel Story Dialogue Box */}
-            <div 
+            {/* Visual Novel Story Dialogue Box —— 浅色羊皮纸质感 */}
+            <div
               onClick={handleSkipTyping}
-              className="relative flex-1 bg-gradient-to-b from-slate-900/95 to-slate-950/95 border-2 border-amber-600/60 p-4 sm:p-6 shadow-2xl flex flex-col justify-between cursor-pointer group min-h-[200px] sm:min-h-[240px]"
+              className="relative flex-1 border-2 border-amber-600/60 p-4 sm:p-6 shadow-2xl flex flex-col justify-between cursor-pointer group min-h-[200px] sm:min-h-[240px]"
               style={{
-                boxShadow: "inset 0 0 30px rgba(0,0,0,0.8), 0 0 15px rgba(245, 158, 11, 0.15)",
+                background: "linear-gradient(180deg, #fffaf0 0%, #fff1d6 100%)",
+                boxShadow: "inset 0 0 30px rgba(180, 83, 9, 0.08), 0 0 15px rgba(245, 158, 11, 0.15)",
               }}
               title={isTyping ? "点击直接跳过打字动画" : undefined}
             >
@@ -605,10 +635,10 @@ NPC设定：
 
               {/* VN Dialogue Content Area with Japanese Quotes */}
               <div className="flex-1 py-1 sm:py-2 flex flex-col justify-center">
-                <p className="text-sm sm:text-base text-amber-50/95 leading-relaxed tracking-wide font-sans select-text">
-                  <span className="text-amber-400 font-serif text-lg mr-1">「</span>
+                <p className="text-sm sm:text-base leading-relaxed tracking-wide font-sans select-text" style={{ color: "#3a2410" }}>
+                  <span className="font-serif text-lg mr-1" style={{ color: "#b45309" }}>「</span>
                   {displayedText}
-                  <span className="text-amber-400 font-serif text-lg ml-1">」</span>
+                  <span className="font-serif text-lg ml-1" style={{ color: "#b45309" }}>」</span>
                 </p>
 
                 {loading && (

@@ -171,3 +171,44 @@ export function cleanJsonResponse<T = unknown>(text: string): T | null {
     return null;
   }
 }
+
+/**
+ * 清洗 AI 输出的对白文本 —— 不让它渲染出界面之外的东西
+ * 无论 AI 返回啥花样，只保留纯文本对白：
+ *  - 去掉所有 HTML 标签（<div>、<style>、<script>、<img> 等）
+ *  - 去掉 markdown 代码块（```xxx```）
+ *  - 去掉行内 markdown 强调符号（**、__、~~）避免星号乱撞
+ *  - 清理换行/多空格，让文本紧凑
+ *  - 卡最大长度 300 字，防止 AI 输出巨长内容撑破对话框
+ */
+export function sanitizeAIText(text: string, maxLen: number = 300): string {
+  if (!text) return "";
+  let s = String(text);
+
+  // 剥 script/style 整块（内容也一起丢）
+  s = s.replace(/<script[\s\S]*?<\/script>/gi, "");
+  s = s.replace(/<style[\s\S]*?<\/style>/gi, "");
+  // 剥其它所有 HTML/XML 标签
+  s = s.replace(/<\/?[a-z][^>]*>/gi, "");
+  // 剥 markdown 代码块
+  s = s.replace(/```[\s\S]*?```/g, "");
+  s = s.replace(/`([^`]+)`/g, "$1");
+  // 剥 markdown 强调符号（保留内容）
+  s = s.replace(/\*\*([^*]+)\*\*/g, "$1");
+  s = s.replace(/__([^_]+)__/g, "$1");
+  s = s.replace(/~~([^~]+)~~/g, "$1");
+  // 剥 HTML 实体
+  s = s.replace(/&(lt|gt|amp|quot|apos|nbsp);/gi, " ");
+  // 剥掉可疑的 CSS 属性形式（"color: red;" 之类）
+  s = s.replace(/\{[^{}]*:[^{}]*\}/g, "");
+  // 压掉多余的空白 / 换行（保留单个空格与句间换行）
+  s = s.replace(/[\r\n]{2,}/g, "\n");
+  s = s.replace(/[ \t]{2,}/g, " ");
+  s = s.trim();
+
+  // 强制最大长度
+  if (s.length > maxLen) {
+    s = s.slice(0, maxLen).trim() + "…";
+  }
+  return s;
+}
