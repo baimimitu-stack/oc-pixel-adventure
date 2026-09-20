@@ -26,10 +26,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Sound toggle
-  const [soundOn, setSoundOn] = useState<boolean>(true);
+  const [soundOn, setSoundOn] = useState<boolean>(sound.enabled);
   const toggleSound = () => {
-    sound.enabled = !soundOn;
-    setSoundOn(!soundOn);
+    setSoundOn(sound.toggle());
   };
 
   // Game state

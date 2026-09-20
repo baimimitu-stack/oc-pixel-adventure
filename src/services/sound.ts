@@ -3,13 +3,52 @@
 
 class RetroAudioEngine {
   private ctx: AudioContext | null = null;
-  public enabled: boolean = true;
+  private masterGain: GainNode | null = null;
+  private isEnabled = true;
+  private currentVolume = 1;
+
+  constructor() {
+    try {
+      const saved = localStorage.getItem("oc_game_volume");
+      const value = saved === null || saved.trim() === "" ? 1 : Number(saved);
+      if (Number.isFinite(value)) this.currentVolume = Math.max(0, Math.min(1, value));
+    } catch {
+      // Audio still works when browser storage is unavailable.
+    }
+  }
+
+  public get enabled() { return this.isEnabled; }
+  public set enabled(value: boolean) {
+    this.isEnabled = value;
+    this.updateGain();
+  }
+
+  public get volume() { return this.currentVolume; }
+  public setVolume(value: number) {
+    if (!Number.isFinite(value)) return;
+    this.currentVolume = Math.max(0, Math.min(1, value));
+    this.updateGain();
+    try {
+      localStorage.setItem("oc_game_volume", String(this.currentVolume));
+    } catch {
+      // Keep the current session usable even when storage is full or blocked.
+    }
+  }
+
+  private updateGain() {
+    if (this.ctx && this.masterGain) {
+      this.masterGain.gain.setValueAtTime(this.enabled ? this.volume : 0, this.ctx.currentTime);
+    }
+  }
 
   private init() {
     if (!this.ctx && typeof window !== "undefined") {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) {
         this.ctx = new AudioCtx();
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.connect(this.ctx.destination);
+        this.updateGain();
       }
     }
     if (this.ctx && this.ctx.state === "suspended") {
@@ -35,7 +74,7 @@ class RetroAudioEngine {
       gain.gain.linearRampToValueAtTime(0.01, now + 0.14);
 
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain!);
 
       osc.start(now);
       osc.stop(now + 0.15);
@@ -62,7 +101,7 @@ class RetroAudioEngine {
       gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
 
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain!);
 
       osc.start(now);
       osc.stop(now + 0.36);
@@ -91,7 +130,7 @@ class RetroAudioEngine {
         gain.gain.exponentialRampToValueAtTime(0.01, start + 0.2);
 
         osc.connect(gain);
-        gain.connect(this.ctx!.destination);
+        gain.connect(this.masterGain!);
 
         osc.start(start);
         osc.stop(start + 0.22);
@@ -119,7 +158,7 @@ class RetroAudioEngine {
       gain.gain.linearRampToValueAtTime(0.01, now + 0.12);
 
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain!);
 
       osc.start(now);
       osc.stop(now + 0.13);
@@ -146,7 +185,7 @@ class RetroAudioEngine {
       gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
 
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain!);
 
       osc.start(now);
       osc.stop(now + 0.09);
@@ -173,7 +212,7 @@ class RetroAudioEngine {
       gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
 
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain!);
 
       osc.start(now);
       osc.stop(now + 0.26);
@@ -200,7 +239,7 @@ class RetroAudioEngine {
       gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
 
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain!);
 
       osc.start(now);
       osc.stop(now + 0.26);
@@ -237,7 +276,7 @@ class RetroAudioEngine {
         gain.gain.exponentialRampToValueAtTime(0.01, start + n.dur);
 
         osc.connect(gain);
-        gain.connect(this.ctx!.destination);
+        gain.connect(this.masterGain!);
 
         osc.start(start);
         osc.stop(start + n.dur);
@@ -263,7 +302,7 @@ class RetroAudioEngine {
       gain.gain.linearRampToValueAtTime(0.01, now + 0.03);
 
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain!);
 
       osc.start(now);
       osc.stop(now + 0.04);
@@ -299,7 +338,7 @@ class RetroAudioEngine {
       gain.gain.linearRampToValueAtTime(0.001, now + 0.04);
 
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain!);
 
       osc.start(now);
       osc.stop(now + 0.045);

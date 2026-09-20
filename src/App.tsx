@@ -23,7 +23,9 @@ import {
   HelpCircle,
   RotateCcw,
   Menu,
-  Download
+  Download,
+  Save,
+  FolderOpen
 } from "lucide-react";
 
 export default function App() {
@@ -33,6 +35,7 @@ export default function App() {
   const [totalCoins, setTotalCoins] = useState<number>(25);
   const [totalStars, setTotalStars] = useState<number>(0);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [loadRevision, setLoadRevision] = useState(0);
 
   // Main menu gates initial view as requested by user
   const [inGame, setInGame] = useState<boolean>(false);
@@ -50,12 +53,15 @@ export default function App() {
   // Floating unlock toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const showToast = (msg: string) => {
+  const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 3500);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timer = setTimeout(() => setToastMessage(null), 3500);
+    return () => clearTimeout(timer);
+  }, [toastMessage]);
 
   // Sync data from local storage
   const refreshData = useCallback(() => {
@@ -70,16 +76,59 @@ export default function App() {
     setTotalCoins(coins);
     setTotalStars(stars);
     setAchievements(achs);
+    setCurrentWorld(GameStorage.getCurrentWorld());
   }, []);
 
   useEffect(() => {
     refreshData();
   }, [refreshData]);
 
-  // Memoize level configuration so it only updates when currentWorld changes
-  const currentLevelConfig = useMemo(() => getLevelByWorld(currentWorld), [currentWorld]);
+  // Reload saved NPC configuration even when restoring the same world.
+  const currentLevelConfig = useMemo(() => getLevelByWorld(currentWorld), [currentWorld, loadRevision]);
 
   const isModalOpen = !inGame || showMainMenu || showNPCCustomizer || showOCStudio || showShop || showStory || showAchievements || showWorldSelect;
+
+  const quickSave = useCallback(() => {
+    try {
+      const existing = GameStorage.getSaveSlots()[0];
+      if (existing && existing.name !== "快速存档" && !window.confirm("第 1 槽已有普通存档，快存将覆盖它。要继续吗？")) return;
+      GameStorage.saveToSlot(0, "快速存档");
+      sound.playClick();
+      showToast(`💾 已快存至第 1 槽 · ${new Date().toLocaleTimeString()}（读取后从关卡起点继续）`);
+    } catch {
+      showToast("快存失败，浏览器存储可能已满或不可用。");
+    }
+  }, [showToast]);
+
+  const quickLoad = useCallback(() => {
+    if (!GameStorage.getSaveSlots()[0]) {
+      showToast("第 1 槽还没有存档，可以先点快存。");
+      return;
+    }
+    if (!GameStorage.loadFromSlot(0)) {
+      showToast("快读失败，存档可能已损坏或浏览器存储不可用。");
+      return;
+    }
+    refreshData();
+    setLoadRevision((value) => value + 1);
+    sound.playClick();
+    showToast(`📂 已读取第 1 槽 · ${new Date().toLocaleTimeString()}，从关卡起点继续。`);
+  }, [refreshData, showToast]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isModalOpen || !activeOC || event.defaultPrevented || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, select, [role='textbox']"))) return;
+      if (!["F5", "F9", "F10"].includes(event.key)) return;
+      event.preventDefault();
+      if (event.repeat) return;
+      if (event.key === "F5") quickSave();
+      else quickLoad();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isModalOpen, activeOC, quickSave, quickLoad]);
 
   const handleLevelComplete = (stats: { coins: number; stars: number; score: number }) => {
     refreshData();
@@ -98,7 +147,7 @@ export default function App() {
     <div className="relative w-screen h-screen flex flex-col bg-sunny ink overflow-hidden font-sans">
 
       {/* Top Application Navigation Bar with Retro Pixel Borders */}
-      <header className="h-14 border-b-4 border-amber-700/70 px-4 flex items-center justify-between z-30 shrink-0 select-none pixel-border-slate" style={{ background: "linear-gradient(180deg, #ffe4b5 0%, #ffd58a 100%)" }}>
+      <header className="min-h-14 border-b-4 border-amber-700/70 px-4 py-2 gap-2 flex flex-wrap items-center justify-between z-30 shrink-0 select-none pixel-border-slate" style={{ background: "linear-gradient(180deg, #ffe4b5 0%, #ffd58a 100%)" }}>
         
         {/* Brand & Active OC Pill */}
         <div className="flex items-center gap-3">
@@ -135,7 +184,7 @@ export default function App() {
         </div>
 
         {/* Action Controls & Resource Counters */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* Total Coins */}
           <div
             onClick={() => setShowShop(true)}
@@ -157,7 +206,23 @@ export default function App() {
           </div>
 
           {/* Navigation Buttons */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              onClick={quickSave}
+              disabled={isModalOpen}
+              className="pixel-btn-green flex items-center gap-1 px-2.5 py-1.5 text-xs disabled:opacity-50"
+              title="快存到第 1 槽（F5）；保存角色与关卡进度，不含关卡内站位"
+            >
+              <Save size={14} /> <span>快存</span>
+            </button>
+            <button
+              onClick={quickLoad}
+              disabled={isModalOpen}
+              className="pixel-btn-blue flex items-center gap-1 px-2.5 py-1.5 text-xs disabled:opacity-50"
+              title="读取第 1 槽（F9 / F10），恢复存档并从关卡起点继续"
+            >
+              <FolderOpen size={14} /> <span>快读</span>
+            </button>
             <button
               onClick={() => {
                 setShowOCStudio(true);
@@ -277,6 +342,7 @@ export default function App() {
             <span><strong>空格键 / W / ⬆</strong> 跳跃 / 二段跳</span>
             <span>靠近篝火/NPC 按 <strong>[E]</strong> 剧情互动</span>
             <span>支持屏幕底部触屏与点击虚拟摇杆</span>
+            <span>F5 快存 · F9 / F10 快读（共用第 1 槽，从关卡起点继续）</span>
           </div>
           <div className="flex items-center gap-2 text-emerald-400 text-[11px]">
             <ShieldCheck size={14} /> 纯本地 IndexedDB 存储，图片绝不上云
@@ -287,6 +353,7 @@ export default function App() {
       {/* Main Canvas Gameplay Area */}
       <main className="flex-1 relative w-full h-full overflow-hidden flex flex-col items-center justify-center">
         <GameCanvas
+          key={loadRevision}
           level={currentLevelConfig}
           activeOC={activeOC}
           isPaused={isModalOpen}
@@ -334,6 +401,8 @@ export default function App() {
 
       {showStory && (
         <StoryDialogueModal
+          key={`world:${currentWorld}:${activeOC.id}`}
+          npcId={`world:${currentWorld}`}
           activeOC={activeOC}
           npc={currentLevelConfig.npc}
           worldName={currentLevelConfig.name}
@@ -388,11 +457,13 @@ export default function App() {
           onNewGame={() => {
             setCurrentWorld(1);
             refreshData();
+            setLoadRevision((value) => value + 1);
           }}
           onLoadSlot={(slotId) => {
             const curWorld = GameStorage.getCurrentWorld();
             setCurrentWorld(curWorld);
             refreshData();
+            setLoadRevision((value) => value + 1);
           }}
           onOpenNPCCustomizer={() => setShowNPCCustomizer(true)}
           onOpenWorldSelect={() => setShowWorldSelect(true)}

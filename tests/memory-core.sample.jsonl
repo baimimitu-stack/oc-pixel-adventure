@@ -1,0 +1,2 @@
+{"id":"example-diary-1","created_at":"2026-09-18T08:00:00Z","content":"今天和旅人坐在树下喝了花茶。","facts":[{"content":"旅人喜欢花茶","importance":3}],"mood_signal":"轻松","source_events":["example-event-1"]}
+{"id":"example-permanent-1","tier":"permanent","created_at":"2026-09-18T08:01:00Z","content":"我们约好下次一起看星星。","source_diary_ids":["example-diary-1"]}

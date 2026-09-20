@@ -3,6 +3,10 @@ import { OCCharacter, LevelConfig, NPCConfig } from "../types";
 import { GameStorage } from "../services/db";
 import { sound } from "../services/sound";
 import { callAI } from "../services/aiClient";
+import { DiaryEntry, Memory } from "../services/memory";
+import { Affection } from "../services/affection";
+import { buildNpcDialoguePrompt } from "../services/npcPrompt";
+import { summarizeCompanion } from "../services/companionCard";
 import {
   getProceduralNPCReply,
   getProceduralRandomEvent,
@@ -32,6 +36,7 @@ import {
 } from "lucide-react";
 
 interface StoryDialogueModalProps {
+  npcId: string;
   activeOC: OCCharacter;
   npc?: LevelConfig["npc"];
   worldName: string;
@@ -42,6 +47,7 @@ interface StoryDialogueModalProps {
 }
 
 export const StoryDialogueModal: React.FC<StoryDialogueModalProps> = ({
+  npcId,
   activeOC,
   npc,
   worldName,
@@ -58,7 +64,35 @@ export const StoryDialogueModal: React.FC<StoryDialogueModalProps> = ({
     avatarEmoji: "🧚",
   };
 
-  // Dialogue History
+  const scope = { npc_id: npcId, oc_id: activeOC.id };
+  const [memoryError, setMemoryError] = useState("");
+  const affectionScope = { npc_id: npcId, oc_id: activeOC.id };
+  const [npcAffection, setNpcAffection] = useState(() => Affection.get(affectionScope));
+  useEffect(() => {
+    setNpcAffection(Affection.get({ npc_id: npcId, oc_id: activeOC.id }));
+  }, [npcId, activeOC.id]);
+  const mounted = useRef(true);
+  const sending = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  const toMessage = (entry: DiaryEntry) => ({
+    sender: entry.role,
+    speakerName: entry.speaker_name || (entry.role === "npc" ? currentNPC.name : activeOC.name),
+    text: entry.content,
+    mood: entry.mood,
+    timestamp: new Date(entry.created_at).toLocaleString(),
+  });
+  const persistLine = (role: "npc" | "player", content: string, mood?: string) => {
+    try {
+      Memory.append(scope, { role, content, mood, kind: "dialogue", speaker_name: role === "npc" ? currentNPC.name : activeOC.name });
+    } catch {
+      if (mounted.current) setMemoryError("这条对话未能保存，浏览器存储可能已满或不可用。当前窗口仍可查看原文。");
+    }
+  };
+
+  // Opening an existing conversation restores its original transcript.
   const [dialogueHistory, setDialogueHistory] = useState<
     { sender: "npc" | "player"; speakerName: string; text: string; mood?: string; timestamp: string }[]
   >([
@@ -70,6 +104,17 @@ export const StoryDialogueModal: React.FC<StoryDialogueModalProps> = ({
       timestamp: "初始对话",
     },
   ]);
+
+  useEffect(() => {
+    try {
+      if (!Memory.get(scope, true).some((entry) => entry.kind === "dialogue")) {
+        Memory.append(scope, { id: "opening-dialogue", role: "npc", speaker_name: currentNPC.name, content: currentNPC.dialogue, mood: "smile", kind: "dialogue" });
+      }
+      setDialogueHistory(Memory.get(scope).filter((entry) => entry.kind === "dialogue").map(toMessage));
+    } catch {
+      setMemoryError("历史对话读取失败，原数据未覆盖。浏览器存储可能不可用。");
+    }
+  }, [npcId, activeOC.id]);
 
   // Current display text & typewriter effect state
   const latestMessage = dialogueHistory[dialogueHistory.length - 1];
@@ -99,7 +144,9 @@ export const StoryDialogueModal: React.FC<StoryDialogueModalProps> = ({
   // ESC 键 / Q 键随时可关闭对话（避免用户找不到关闭键）
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" || e.code === "KeyQ") {
+      const target = e.target;
+      const editing = target instanceof HTMLElement && (target.isContentEditable || !!target.closest("input, textarea, select"));
+      if (e.key === "Escape" || (e.code === "KeyQ" && !editing)) {
         e.preventDefault();
         onClose();
       }
@@ -110,7 +157,7 @@ export const StoryDialogueModal: React.FC<StoryDialogueModalProps> = ({
 
   // Typewriter animation when latest message changes
   useEffect(() => {
-    if (!latestMessage) return;
+    if (!latestMessage) { setDisplayedText(""); setIsTyping(false); return; }
 
     if (typingTimerRef.current) {
       clearInterval(typingTimerRef.current);
@@ -138,7 +185,7 @@ export const StoryDialogueModal: React.FC<StoryDialogueModalProps> = ({
     return () => {
       if (typingTimerRef.current) clearInterval(typingTimerRef.current);
     };
-  }, [dialogueHistory.length]);
+  }, [latestMessage]);
 
   // Skip typewriter to instant full text on click
   const handleSkipTyping = () => {
@@ -260,7 +307,14 @@ export const StoryDialogueModal: React.FC<StoryDialogueModalProps> = ({
 
   // Submit speech / handle sending message
   const handleSendMessage = async (userText: string) => {
-    if (!userText.trim() || loading) return;
+    if (!userText.trim() || loading || sending.current) return;
+    sending.current = true;
+    // Read the prior context before appending this turn, so the input appears only once.
+    let memoryContext = "";
+    try { memoryContext = Memory.buildContext(scope); }
+    catch { setMemoryError("记忆读取失败，本轮使用当前对话继续。"); }
+    const ocCardSummary = summarizeCompanion(activeOC);
+    persistLine("player", userText);
 
     const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
@@ -282,36 +336,20 @@ export const StoryDialogueModal: React.FC<StoryDialogueModalProps> = ({
     const apiConfig = GameStorage.getApiConfig();
 
     // 构造 prompt（同后端原逻辑，仅搬到前端）
-    const prompt = `你是一个充满复古像素RPG游戏风格的NPC。
-NPC设定：
-- 名字: ${currentNPC.name}
-- 身份: ${currentNPC.role}
-- 性格特点: ${currentNPC.personality}
-
-玩家的原创角色(OC)设定：
-- 名字: ${activeOC.name}
-- 称号: ${activeOC.title || "初出茅庐的探险家"}
-- OC性格设定: ${activeOC.personality}
-- 当前所在冒险世界: ${worldName}
-- 当前与NPC的好感度: ${activeOC.affection || 0} / 100
-
-玩家对话输入: "${userText}"
-
-请按照NPC的性格和与玩家OC的关系，进行一段生动、带感、符合日系像素RPG风格的对话回应，并给予好感度增减判定。
-请严格输出JSON格式，包含以下字段：
-- "reply": NPC的台词（**50-100 字纯中文对白**，只能是普通文字与常见标点，禁止包含 HTML/CSS/JavaScript/Markdown 标记、代码块、超链接、图片、样式、控制字符、连续空行；禁止使用 <>{}[]*_~ 这类符号包裹内容）
-- "expression": NPC此时的表情标签（只能是: "smile" / "excited" / "shy" / "surprised" / "cool"）
-- "affectionChange": 好感度变化整数（1 至 4 之间）
-- "giftItem": 若好感度较高或对话契合，可赠送小礼物（如"幸运金币"、"星之浆果"或 null）
-
-**严格禁止**：
-1. 不要输出 <div>/<span>/<style>/<script> 等任何 HTML 标签
-2. 不要输出 CSS 样式声明（如 color: red、background: #fff 之类）
-3. 不要输出 Markdown 代码块或 ** 加粗、__ 下划线 等标记
-4. 不要企图操纵玩家界面、修改字体颜色、改变布局
-5. reply 必须是可以直接放进 <p> 里显示的干净纯文本
-
-请直接输出合法JSON，不要包裹Markdown代码块。`;
+    const prompt = buildNpcDialoguePrompt({
+      memoryContext,
+      ocCardSummary,
+      npcName: currentNPC.name,
+      npcRole: currentNPC.role,
+      npcPersonality: currentNPC.personality,
+      ocName: activeOC.name,
+      ocTitle: activeOC.title,
+      ocPersonality: activeOC.personality,
+      ocBio: activeOC.bio,
+      worldName,
+      affection: npcAffection,
+      userText,
+    });
 
     const procedural = getProceduralNPCReply({
       npcName: currentNPC.name,
@@ -321,7 +359,7 @@ NPC设定：
       ocTitle: activeOC.title,
       ocPersonality: activeOC.personality,
       worldName,
-      affection: activeOC.affection || 10,
+      affection: npcAffection,
       userMessage: userText,
     });
 
@@ -369,6 +407,9 @@ NPC设定：
       // 保持 procedural fallback
     }
 
+    persistLine("npc", replyText, expression);
+    sending.current = false;
+    if (!mounted.current) return;
     setDialogueHistory((prev) => [
       ...prev,
       {
@@ -380,18 +421,26 @@ NPC设定：
       },
     ]);
 
-    GameStorage.updateActiveOC((oc) => ({
-      ...oc,
-      affection: Math.min(100, (oc.affection || 0) + affectionDelta),
-    }));
-    GameStorage.updateAchievement("affection_30", affectionDelta);
-    if (giftItem) {
-      GameStorage.addCoins(10);
+    try {
+      const nextAffection = Affection.adjust(
+        { npc_id: npcId, oc_id: activeOC.id },
+        affectionDelta,
+      );
+      setNpcAffection(nextAffection);
+      // Achievement tracks reaching 30 with any single NPC, not a shared OC meter.
+      if (nextAffection >= 30) {
+        GameStorage.updateAchievement("affection_30", 30);
+      }
+      if (giftItem) {
+        GameStorage.addCoins(10);
+      }
+      sound.playStar();
+      onRefreshData();
+    } catch {
+      setMemoryError("对话已显示，但部分游戏数据未能保存，浏览器存储可能已满。");
+    } finally {
+      setLoading(false);
     }
-
-    sound.playStar();
-    onRefreshData();
-    setLoading(false);
   };
 
   // Trigger dynamic random adventure event
@@ -400,20 +449,13 @@ NPC设定：
     sound.playClick();
     const apiConfig = GameStorage.getApiConfig();
 
-    const prompt = `为横版像素过关冒险游戏生成一个趣味动态随机突发事件。
-玩家OC角色名：${activeOC.name}，性格：${activeOC.personality}。
-所在区域：${worldName}。
-
-请生成 JSON：
-- "title": 事件标题（10字内）
-- "description": 事件描述（30-60字，营造冒险临场感）
-- "choices": 两个选项数组，每个包含：
-  - "text": 选项文字
-  - "outcome": 结果描述
-  - "coins": 获得的金币数值 (5-20)
-  - "stars": 获得的星星数 (0 或 1)
-
-只返回标准JSON，不要代码块。`;
+    const prompt = `为像素冒险游戏写一个短随机事件。角色 ${activeOC.name}（${activeOC.personality}）在 ${worldName}。
+要求：具体、短、当场能发生；不要鸡汤、不要AI腔、不要全知旁白、不要过度描写气氛。
+只返回 JSON：
+- "title": 标题，10字内
+- "description": 事件本身，30-60字，说清楚发生了什么
+- "choices": 两个选项，每项含 "text"、"outcome"、"coins"(5-20)、"stars"(0或1)
+不要代码块。`;
 
     let event = getProceduralRandomEvent(activeOC.name, worldName);
     try {
@@ -450,6 +492,7 @@ NPC设定：
   };
 
   const handleResolveEventChoice = (choice: { outcome: string; coins: number; stars: number }) => {
+    persistLine("npc", `【奇遇揭晓】${choice.outcome}`, "excited");
     if (choice.coins > 0) GameStorage.addCoins(choice.coins);
     if (choice.stars > 0) GameStorage.addStars(choice.stars);
     sound.playStar();
@@ -491,6 +534,7 @@ NPC设定：
       {/* Visual Novel Full Stage Window */}
       <div className="relative w-full max-w-5xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-slate-100 flex flex-col min-h-[600px] max-h-[92vh] pixel-panel pixel-border-gold shadow-2xl overflow-hidden">
         
+        {memoryError && <p role="alert" className="shrink-0 p-2 text-xs" style={{ background: "#fee2e2", color: "#7f1d1d" }}>{memoryError}</p>}
         {/* Top Scenic Bar / Navigation Controls */}
         <div className="flex flex-wrap items-center justify-between px-3 sm:px-5 py-2.5 bg-slate-950/80 border-b-2 border-amber-900/60 z-10 shrink-0 gap-2">
           {/* Left: Location & Bond indicator */}
@@ -502,7 +546,7 @@ NPC设定：
 
             <div className="flex items-center gap-1.5 bg-rose-950/80 px-3 py-1 border border-rose-600/50 text-[11px] font-pixel text-rose-200">
               <Heart size={13} className="text-rose-400 fill-rose-400 animate-pulse" />
-              <span>好感度：{activeOC.affection || 10}/100</span>
+              <span>好感度：{npcAffection}/100</span>
             </div>
           </div>
 
@@ -898,13 +942,13 @@ NPC设定：
                   羁绊度
                 </span>
                 <span className="text-amber-300 font-bold">
-                  {activeOC.affection || 10} / 100
+                  {npcAffection} / 100
                 </span>
               </div>
               <div className="w-full bg-slate-950 h-2 border border-slate-700 overflow-hidden">
                 <div
                   className="bg-gradient-to-r from-rose-500 via-amber-400 to-amber-300 h-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, activeOC.affection || 10)}%` }}
+                  style={{ width: `${Math.min(100, npcAffection)}%` }}
                 />
               </div>
             </div>
@@ -944,16 +988,24 @@ NPC设定：
       {/* Backlog (LOG) History Modal Drawer                            */}
       {/* ============================================================ */}
       {showLogModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="relative w-full max-w-2xl bg-slate-900 border-2 border-amber-500 p-5 pixel-panel pixel-border-gold shadow-2xl flex flex-col max-h-[80vh]">
-            <div className="flex items-center justify-between border-b-2 border-slate-700 pb-3 mb-3">
-              <div className="flex items-center gap-2 font-pixel text-sm text-amber-300 font-bold">
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center backdrop-blur-sm p-4 animate-fade-in"
+          style={{ background: "rgba(58, 36, 16, 0.35)" }}
+        >
+          <div
+            className="relative w-full max-w-2xl border-2 p-5 pixel-panel pixel-border-gold shadow-2xl flex flex-col max-h-[80vh]"
+            style={{ background: "#fffaf0", borderColor: "#d1a86c", color: "#3a2410" }}
+          >
+            <div className="flex items-center justify-between border-b-2 pb-3 mb-3" style={{ borderColor: "#d1a86c" }}>
+              <div className="flex items-center gap-2 font-pixel text-sm font-bold" style={{ color: "#b45309" }}>
                 <ScrollText size={16} />
                 <span>历史对话记录 (BACKLOG)</span>
               </div>
               <button
                 onClick={() => setShowLogModal(false)}
-                className="pixel-btn-slate p-1 text-slate-400 hover:text-white"
+                className="pixel-btn-slate p-1"
+                style={{ color: "#3a2410" }}
+                title="关闭"
               >
                 <X size={15} />
               </button>
@@ -965,21 +1017,22 @@ NPC设定：
                 return (
                   <div
                     key={idx}
-                    className={`p-3 border-l-4 ${
-                      isNPC
-                        ? "bg-slate-800/80 border-amber-400 text-amber-100"
-                        : "bg-indigo-950/80 border-indigo-400 text-indigo-100"
-                    }`}
+                    className="p-3 border-l-4"
+                    style={{
+                      background: isNPC ? "#fff1d6" : "#e0e7ff",
+                      borderColor: isNPC ? "#f59e0b" : "#6366f1",
+                      color: "#3a2410",
+                    }}
                   >
-                    <div className="flex items-center justify-between text-[11px] font-pixel mb-1 opacity-80">
-                      <span className="font-bold text-amber-300">
+                    <div className="flex items-center justify-between text-[11px] font-pixel mb-1">
+                      <span className="font-bold" style={{ color: isNPC ? "#b45309" : "#4338ca" }}>
                         【{item.speakerName}】
                       </span>
-                      <span className="text-[10px] text-slate-400">
+                      <span className="text-[10px]" style={{ color: "#6b4a2b" }}>
                         {item.timestamp}
                       </span>
                     </div>
-                    <p className="text-xs leading-relaxed select-text font-sans">
+                    <p className="text-xs leading-relaxed select-text font-sans" style={{ color: "#3a2410" }}>
                       {item.text}
                     </p>
                   </div>
@@ -987,10 +1040,11 @@ NPC设定：
               })}
             </div>
 
-            <div className="pt-2 border-t border-slate-800 flex justify-end">
+            <div className="pt-2 border-t flex justify-end" style={{ borderColor: "#d1a86c" }}>
               <button
                 onClick={() => setShowLogModal(false)}
-                className="pixel-btn-slate px-4 py-1.5 text-xs font-pixel text-slate-200 hover:text-white"
+                className="pixel-btn-slate px-4 py-1.5 text-xs font-pixel"
+                style={{ color: "#3a2410" }}
               >
                 返回当前剧情
               </button>

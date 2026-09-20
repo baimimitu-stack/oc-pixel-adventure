@@ -16,6 +16,91 @@ export interface CosmeticItem {
   color: string;
 }
 
+export interface CompanionManifestation {
+  context: string;
+  behavior: string;
+}
+
+export interface CompanionPaletteLayer {
+  name: string;
+  description: string;
+  manifestations: CompanionManifestation[];
+}
+
+/** memory-core v1.2 `extensions.companion.character` 八个主字段（另可带 bound_worldbooks）。 */
+export interface CompanionCharacter {
+  basic_info: {
+    name: string;
+    age: number | null;
+    identity: string;
+    user_relation: string;
+  };
+  appearance: {
+    height: string;
+    body_type: string;
+    signature_features: string[];
+    clothing_style: string;
+    details: Record<string, string>;
+  };
+  personality_palette: {
+    base: CompanionPaletteLayer;
+    primary: CompanionPaletteLayer;
+    accent: CompanionPaletteLayer;
+  };
+  backstory_timeline: { age: number | null; event: string }[];
+  relationships: { with: string; description: string }[];
+  three_faces: {
+    public: string;
+    under_pressure: string;
+    hidden: string;
+  };
+  notes: string;
+  advanced: {
+    variables: Record<string, string>;
+    context_hints: string;
+  };
+  bound_worldbooks?: string[];
+}
+
+export interface CompanionExtension {
+  companion_id: string;
+  character: CompanionCharacter;
+  media_style?: {
+    photo_style_lock?: string;
+    negative_prompt?: string;
+    seed_range?: number[] | null;
+  };
+  memory_policy?: Record<string, unknown>;
+}
+
+/** Tavern V3 主字段 + extensions.companion */
+export interface CompanionCard {
+  spec: "chara_card_v3";
+  spec_version: string;
+  data: {
+    name: string;
+    description: string;
+    personality: string;
+    scenario: string;
+    first_mes: string;
+    mes_example: string;
+    creator_notes: string;
+    system_prompt: string;
+    post_history_instructions: string;
+    alternate_greetings: string[];
+    tags: string[];
+    creator: string;
+    character_version: string;
+    character_book?: unknown;
+    assets?: unknown[];
+    extensions?: {
+      companion?: CompanionExtension;
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  };
+}
+
 export interface OCCharacter {
   id: string;
   name: string;
@@ -37,6 +122,7 @@ export interface OCCharacter {
     cape?: string;
     pet?: string;
   };
+  companionCard?: CompanionCard;
 }
 
 export interface Achievement {

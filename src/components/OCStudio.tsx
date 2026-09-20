@@ -1,7 +1,16 @@
 import React, { useState, useRef, useEffect } from "react";
-import { OCCharacter, PersonalityType } from "../types";
+import { OCCharacter, PersonalityType, CompanionCharacter } from "../types";
 import { GameStorage } from "../services/db";
 import { sound } from "../services/sound";
+import {
+  cardToOC,
+  companionFileName,
+  downloadCompanion,
+  emptyCompanionCharacter,
+  parseCompanionCard,
+  toCompanionCard,
+} from "../services/companionCard";
+import { CompanionCardPanel } from "./CompanionCardPanel";
 import { 
   ShieldCheck, 
   Upload, 
@@ -66,6 +75,18 @@ export const OCStudio: React.FC<OCStudioProps> = ({
   const [uploadError, setUploadError] = useState<string>("");
   // 粘贴目标：avatar / portrait —— 决定 Ctrl+V 时贴到头像还是立绘
   const [pasteTarget, setPasteTarget] = useState<"avatar" | "portrait">("avatar");
+  const [showCompanion, setShowCompanion] = useState(false);
+  const [companionDraft, setCompanionDraft] = useState<CompanionCharacter>(() => emptyCompanionCharacter({
+    name: activeOC.name, identity: activeOC.title, personality: activeOC.personality,
+  }));
+  const companionInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const stored = activeOC.companionCard?.data.extensions?.companion?.character;
+    setCompanionDraft(stored
+      ? JSON.parse(JSON.stringify(stored))
+      : emptyCompanionCharacter({ name: activeOC.name, identity: activeOC.title, personality: activeOC.personality }));
+  }, [activeOC.id, activeOC.companionCard]);
 
   // 全局粘贴监听：创建中的 OC 表单打开时，Ctrl+V 直接把剪贴板图片贴进目标位
   useEffect(() => {
@@ -220,6 +241,7 @@ export const OCStudio: React.FC<OCStudioProps> = ({
       unlockedAppearances: [],
       equippedCosmetics: {},
     };
+    newOC.companionCard = toCompanionCard(newOC);
 
     GameStorage.saveOC(newOC);
     GameStorage.setActiveOC(newOC.id);
@@ -269,6 +291,41 @@ export const OCStudio: React.FC<OCStudioProps> = ({
         }
       } catch (err) {
         alert("导入格式无效，请选择正确的 OC JSON 备份文件。");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const exportCompanionCard = (oc: OCCharacter) => {
+    downloadCompanion({ ...oc, companionCard: toCompanionCard(oc, oc.id === activeOC.id ? companionDraft : oc.companionCard?.data.extensions?.companion?.character) });
+    sound.playClick();
+  };
+
+  const saveCompanionToActive = () => {
+    const next = cardToOC(toCompanionCard({ ...activeOC, name: companionDraft.basic_info.name.trim() || activeOC.name }, companionDraft), activeOC);
+    GameStorage.upsertOC(next);
+    GameStorage.setActiveOC(next.id);
+    sound.playStar();
+    onRefreshOCs();
+  };
+
+  const importCompanionCard = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const card = parseCompanionCard(String(event.target?.result || ""));
+        const companionId = card.data.extensions?.companion?.companion_id;
+        const existing = ocs.find((oc) => oc.companionCard?.data.extensions?.companion?.companion_id === companionId);
+        const next = cardToOC(card, existing);
+        GameStorage.upsertOC(next);
+        GameStorage.setActiveOC(next.id);
+        sound.playStar();
+        onRefreshOCs();
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "导入角色卡失败。");
       }
     };
     reader.readAsText(file);
@@ -354,6 +411,17 @@ export const OCStudio: React.FC<OCStudioProps> = ({
                 <FileUp size={14} /> 导入角色
                 <input type="file" accept=".json" onChange={importOCs} className="hidden" />
               </label>
+              <button
+                onClick={() => exportCompanionCard(activeOC)}
+                className="pixel-btn-slate flex items-center gap-1 text-slate-300 px-3 py-2 text-xs"
+                title={`导出 ${companionFileName(activeOC.name)}`}
+              >
+                <Download size={14} /> 导出角色卡
+              </button>
+              <label className="pixel-btn-slate flex items-center gap-1 text-slate-300 px-3 py-2 cursor-pointer text-xs">
+                <FileUp size={14} /> 导入角色卡
+                <input ref={companionInputRef} type="file" accept=".json,.companion.json,application/json" onChange={importCompanionCard} className="hidden" />
+              </label>
             </div>
           </div>
 
@@ -369,6 +437,14 @@ export const OCStudio: React.FC<OCStudioProps> = ({
               }
             }}
             className="hidden"
+          />
+
+          <CompanionCardPanel
+            open={showCompanion}
+            onToggle={() => setShowCompanion((value) => !value)}
+            character={companionDraft}
+            onChange={setCompanionDraft}
+            onSave={saveCompanionToActive}
           />
 
           {/* Create New OC Form Drawer */}
@@ -637,11 +713,8 @@ export const OCStudio: React.FC<OCStudioProps> = ({
                         className="w-16 h-16 object-contain bg-slate-800 border-2 border-slate-700 p-1 pixel-border-slate"
                       />
                       
-                      {/* Affection badge */}
-                      <div className="absolute -bottom-1.5 -right-1.5 bg-rose-600 text-white text-[10px] font-bold px-1.5 py-0.2 border border-rose-400 flex items-center gap-0.5">
-                        <Heart size={10} className="fill-rose-200" />
-                        <span>{oc.affection || 10}</span>
-                      </div>
+                      <span className="mt-1 text-[10px] text-slate-400 font-pixel" title="好感度已改为每位NPC独立计算">好感·按NPC</span>
+
 
                       {/* Stand portrait badge / upload trigger */}
                       <button
@@ -708,6 +781,17 @@ export const OCStudio: React.FC<OCStudioProps> = ({
                         <Trash2 size={14} />
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        exportCompanionCard(oc);
+                      }}
+                      className="text-slate-500 hover:text-amber-300 p-1 transition-colors self-end"
+                      title={`导出 ${companionFileName(oc.name)}`}
+                    >
+                      <Download size={14} />
+                    </button>
                   </div>
                 );
               })}

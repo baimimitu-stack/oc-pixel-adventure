@@ -3,6 +3,7 @@ import { SaveSlotData, ApiConfig, ApiProvider } from "../types";
 import { GameStorage } from "../services/db";
 import { sound } from "../services/sound";
 import { callAI } from "../services/aiClient";
+import { MemoryLibrary } from "./MemoryLibrary";
 import { 
   Play, 
   RotateCcw, 
@@ -114,9 +115,10 @@ export const MainMenuModal: React.FC<MainMenuModalProps> = ({
   onClose,
   isInitialScreen = false,
 }) => {
-  const [activeTab, setActiveTab] = useState<"menu" | "slots" | "settings" | "api" | "download" | "privacy">("menu");
+  const [activeTab, setActiveTab] = useState<"menu" | "slots" | "settings" | "api" | "download" | "privacy" | "memory">("menu");
   const [slots, setSlots] = useState<(SaveSlotData | null)[]>(GameStorage.getSaveSlots());
   const [soundEnabled, setSoundEnabled] = useState<boolean>(sound.enabled);
+  const [volume, setVolume] = useState<number>(sound.volume);
   const [allWorldsUnlocked, setAllWorldsUnlocked] = useState<boolean>(() => GameStorage.isAllWorldsUnlocked());
   const [messageToast, setMessageToast] = useState<string | null>(null);
 
@@ -390,6 +392,11 @@ export const MainMenuModal: React.FC<MainMenuModalProps> = ({
           </button>
         </div>
 
+        <button onClick={() => setActiveTab("memory")} className={`shrink-0 py-2 mt-2 text-xs font-pixel ${activeTab === "memory" ? "pixel-btn-amber" : "pixel-btn-slate"}`}>
+          📖 记忆库 · 对话与永久记忆
+        </button>
+        {activeTab === "memory" && <MemoryLibrary currentWorld={currentWorld} />}
+
         {/* 1. Main Menu Tab */}
         {activeTab === "menu" && (
           <div className="flex-1 overflow-y-auto py-5 space-y-4">
@@ -582,6 +589,31 @@ export const MainMenuModal: React.FC<MainMenuModalProps> = ({
                 {soundEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
                 <span>{soundEnabled ? "已开启" : "已静音"}</span>
               </button>
+            </div>
+
+            <div className="p-4 pixel-border-slate space-y-3" style={{ background: "#fff1d6", color: "#3a2410" }}>
+              <div className="flex items-center justify-between text-xs font-pixel">
+                <label htmlFor="game-volume">音效音量</label>
+                <output htmlFor="game-volume">{Math.round(volume * 100)}%</output>
+              </div>
+              <input
+                id="game-volume"
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={Math.round(volume * 100)}
+                aria-valuetext={`${Math.round(volume * 100)}%`}
+                onChange={(event) => {
+                  const next = Number(event.target.value) / 100;
+                  sound.setVolume(next);
+                  setVolume(next);
+                }}
+                className="w-full accent-amber-600 cursor-pointer"
+              />
+              <p className="text-[11px]" style={{ color: "#6b4a2b" }}>
+                {!soundEnabled ? "音效已关闭，开启后使用此音量。" : volume === 0 ? "当前音量为 0，游戏无声。" : "立即生效，自动记住你的音量。"}
+              </p>
             </div>
 
             {/* Privacy & Safe */}
@@ -958,7 +990,7 @@ export const MainMenuModal: React.FC<MainMenuModalProps> = ({
               <ul className="text-xs leading-relaxed space-y-1.5 list-disc list-inside" style={{ color: "#052e16" }}>
                 <li>OC 头像、OC 立绘、NPC 立绘全部作为 <strong>base64</strong> 存进浏览器 <strong>localStorage</strong>。</li>
                 <li>本站是 <strong>纯静态 SPA，没有后端服务器</strong>。AI 请求由你的浏览器<strong>直接发到 Google / DeepSeek / OpenAI 兼容端点</strong>，站长这边看不到你的对白也看不到你的 Key。</li>
-                <li>AI 请求体<strong>只含文字</strong>（角色名、性格、你输入的对白），<strong>从不发送你上传的图片</strong>。可搜 <code>src/services/aiClient.ts</code> 验证。</li>
+                <li>AI 请求体<strong>只含文字</strong>（角色设定、你输入的对白、当前关系的永久记忆和最近 6 条记录），<strong>从不发送你上传的图片</strong>。记忆随对话发到你配置的 AI 服务商。</li>
                 <li>API Key 只在本机 localStorage 里；下面按钮可一键抹除。</li>
               </ul>
             </div>

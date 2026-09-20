@@ -1,4 +1,5 @@
 import { OCCharacter, CosmeticItem, Achievement, NPCConfig, SaveSlotData, ApiConfig } from "../types";
+import { Affection } from "./affection";
 
 // SVG Data URIs for cute preset pixel OCs
 const SHIBA_HERO_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
@@ -366,6 +367,14 @@ export class GameStorage {
     this.addOC(oc);
   }
 
+  public static upsertOC(oc: OCCharacter) {
+    const ocs = this.getOCs();
+    const index = ocs.findIndex((item) => item.id === oc.id);
+    if (index === -1) ocs.unshift(oc);
+    else ocs[index] = oc;
+    this.saveOCs(ocs);
+  }
+
   public static setActiveOC(id: string) {
     this.setActiveOCId(id);
   }
@@ -537,6 +546,7 @@ export class GameStorage {
       totalStars,
       currentWorld,
       customNPCs: this.getCustomNPCs(),
+      npcAffection: Affection.getAll(),
     };
 
     localStorage.setItem(`oc_game_save_slot_snapshot_${slotId}`, JSON.stringify(fullSnapshot));
@@ -558,6 +568,7 @@ export class GameStorage {
       if (typeof snapshot.totalStars === "number") localStorage.setItem(STORAGE_KEYS.TOTAL_STARS, snapshot.totalStars.toString());
       if (typeof snapshot.currentWorld === "number") localStorage.setItem(STORAGE_KEYS.CURRENT_WORLD, snapshot.currentWorld.toString());
       if (snapshot.customNPCs) localStorage.setItem(STORAGE_KEYS.CUSTOM_NPCS, JSON.stringify(snapshot.customNPCs));
+      if (snapshot.npcAffection) Affection.replaceAll(snapshot.npcAffection);
       return true;
     } catch (e) {
       console.error("Failed to load save slot:", e);
@@ -578,10 +589,11 @@ export class GameStorage {
     localStorage.setItem(STORAGE_KEYS.TOTAL_STARS, "0");
     localStorage.setItem(STORAGE_KEYS.CURRENT_WORLD, "1");
     localStorage.setItem(STORAGE_KEYS.ACHIEVEMENTS, JSON.stringify(INITIAL_ACHIEVEMENTS));
-    // Reset OC affection & stats
+    // Reset per-NPC affection (independent of OC) and OC stats
+    Affection.clear();
     const ocs = this.getOCs();
     if (ocs.length > 0) {
-      ocs[0].affection = 10;
+      ocs[0].affection = 10; // legacy field, no longer used by dialogue
       ocs[0].coinsCollected = 0;
       ocs[0].starsCollected = 0;
       this.saveOCs(ocs);
@@ -692,6 +704,9 @@ export class GameStorage {
   /** 抹除整个游戏在本机的所有数据（存档 / OC / NPC / API Key / 进度 / 上传图）。
    *  刷新后回到"第一次进入游戏"的状态。 */
   public static wipeEverything() {
+    localStorage.removeItem("oc_game_memory_v1");
+    localStorage.removeItem("oc_game_volume");
+    Affection.clear();
     for (const key of Object.values(STORAGE_KEYS)) {
       localStorage.removeItem(key);
     }
