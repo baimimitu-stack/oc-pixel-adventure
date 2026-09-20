@@ -458,7 +458,7 @@ NPC设定：
   const displayedCharacterPersonality = isViewingNPC ? currentNPC.personality : activeOC.personality;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-2 sm:p-4 overflow-y-auto">
+    <div className="story-vn-scope fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-2 sm:p-4 overflow-y-auto">
       {/* Visual Novel Full Stage Window */}
       <div className="relative w-full max-w-5xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-slate-100 flex flex-col min-h-[600px] max-h-[92vh] pixel-panel pixel-border-gold shadow-2xl overflow-hidden">
         
