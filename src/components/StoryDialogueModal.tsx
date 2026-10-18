@@ -434,6 +434,8 @@ export const StoryDialogueModal: React.FC<StoryDialogueModalProps> = ({
       }
       if (giftItem) {
         GameStorage.addCoins(10);
+        GameStorage.updateAchievement("coins_30", 10);
+        GameStorage.updateAchievement("coins_100", 10);
       }
       sound.playStar();
       onRefreshData();
@@ -494,8 +496,16 @@ export const StoryDialogueModal: React.FC<StoryDialogueModalProps> = ({
 
   const handleResolveEventChoice = (choice: { outcome: string; coins: number; stars: number }) => {
     persistLine("npc", `【奇遇揭晓】${choice.outcome}`, "excited");
-    if (choice.coins > 0) GameStorage.addCoins(choice.coins);
-    if (choice.stars > 0) GameStorage.addStars(choice.stars);
+    if (choice.coins > 0) {
+      GameStorage.addCoins(choice.coins);
+      GameStorage.updateAchievement("coins_30", choice.coins);
+      GameStorage.updateAchievement("coins_100", choice.coins);
+    }
+    if (choice.stars > 0) {
+      GameStorage.addStars(choice.stars);
+      GameStorage.updateAchievement("stars_3", choice.stars);
+      GameStorage.updateAchievement("stars_8", choice.stars);
+    }
     sound.playStar();
     setDialogueHistory((prev) => [
       ...prev,
