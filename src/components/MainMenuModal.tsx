@@ -52,15 +52,15 @@ interface MainMenuModalProps {
 }
 
 /** 每种服务商的候选模型建议列表（openai_compatible 完全自由填） */
-const MODEL_PRESETS_BY_PROVIDER: Record<ApiProvider, { id: string; name: string; desc: string }[]> = {
+const MODEL_PRESETS_BY_PROVIDER: Record<ApiProvider, { id: string; name: string; tag?: string; desc: string }[]> = {
   gemini: [
-    { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash (推荐)", desc: "综合能力最强的当前 Flash 主力模型" },
-    { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash (稳定)", desc: "覆盖广、响应稳，适合大部分对话" },
-    { id: "gemini-1.5-flash-8b", name: "Gemini 1.5 Flash-8B (轻量)", desc: "更小的推理成本，高频闲聊 NPC 首选" },
+    { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", tag: "推荐", desc: "综合能力最强的当前 Flash 主力模型" },
+    { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash", tag: "稳定", desc: "覆盖广、响应稳，适合大部分对话" },
+    { id: "gemini-1.5-flash-8b", name: "Gemini 1.5 Flash-8B", tag: "轻量", desc: "更小的推理成本，高频闲聊 NPC 首选" },
   ],
   deepseek: [
-    { id: "deepseek-chat", name: "deepseek-chat (推荐·V3)", desc: "官方对话主力模型，性价比极高，中文表现出色" },
-    { id: "deepseek-reasoner", name: "deepseek-reasoner (R1)", desc: "带推理链的强模型，NPC 回复更有深度，但更贵更慢" },
+    { id: "deepseek-chat", name: "deepseek-chat", tag: "推荐·V3", desc: "官方对话主力模型，性价比极高，中文表现出色" },
+    { id: "deepseek-reasoner", name: "deepseek-reasoner", tag: "R1", desc: "带推理链的强模型，NPC 回复更有深度，但更贵更慢" },
   ],
   openai_compatible: [
     // 空列表 —— 让用户自己填 model 名，兼容一切 OneAPI/NewAPI/OpenRouter/硅基流动/自建中转
@@ -779,6 +779,9 @@ export const MainMenuModal: React.FC<MainMenuModalProps> = ({
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-xs font-pixel">{m.name}</span>
+                            {m.tag && (
+                              <span className="text-[11px]" style={{ color: "#6b4a2b" }}>（{m.tag}）</span>
+                            )}
                             {isSelected && (
                               <span className="text-[10px] px-1.5 py-0.5 font-pixel" style={{ background: "#b45309", color: "#fff" }}>
                                 当前选用
