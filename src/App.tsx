@@ -151,6 +151,14 @@ export default function App() {
         
         {/* Brand & Active OC Pill */}
         <div className="flex items-center gap-3">
+          <a
+            href="/"
+            className="pixel-btn-slate p-1.5 text-slate-300 shrink-0"
+            title="返回游戏盒子首页"
+          >
+            <span className="text-sm">🕹️</span>
+          </a>
+
           <div className="flex items-center gap-2">
             <span className="text-xl">⭐</span>
             <h1 className="font-pixel text-xs sm:text-sm font-bold text-amber-400">
