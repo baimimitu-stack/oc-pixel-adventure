@@ -227,6 +227,17 @@ export interface NPCConfig {
   portraitUrl?: string; // Optional custom portrait art / 立绘
   /** 按 mood 切换的立绘。AI 返 expression 后自动挑对应槽。 */
   expressionPortraits?: ExpressionPortraitMap;
+  /** 玩家靠近但还没按 E 对话时，头顶随机冒出的环境闲话，不触发任何系统 */
+  ambientLines?: string[];
+}
+
+/** 关卡里可以走近直接读到的碑文/告示牌，纯环境叙事，不弹窗、不用按键 */
+export interface LorePlaque {
+  id: string;
+  x: number;
+  y: number;
+  icon: string;
+  text: string;
 }
 
 export type ApiProvider = "gemini" | "deepseek" | "openai_compatible";
@@ -275,4 +286,5 @@ export interface LevelConfig {
   enemies: EnemyEntity[];
   goalX: number;
   npc?: NPCConfig;
+  lorePlaques?: LorePlaque[];
 }

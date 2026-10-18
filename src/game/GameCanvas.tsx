@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import { LevelConfig, OCCharacter, GameParticle, FloatingText, PlatformTile } from "../types";
 import { sound } from "../services/sound";
 import { GameStorage } from "../services/db";
+import { getThemePalette } from "./themes";
 import { Sparkles, Trophy, ArrowRight, RotateCcw, MessageSquare, Volume2, VolumeX } from "lucide-react";
 
 interface GameCanvasProps {
@@ -12,6 +13,23 @@ interface GameCanvasProps {
   onOpenShop: () => void;
   onOpenStory: (npc: LevelConfig["npc"]) => void;
   onBackToMap: () => void;
+}
+
+/** 按当前 ctx.font 逐字量宽度换行，中文没有空格可断，只能按字符累加 */
+function wrapCjkText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const lines: string[] = [];
+  let current = "";
+  for (const ch of text) {
+    const test = current + ch;
+    if (current.length > 0 && ctx.measureText(test).width > maxWidth) {
+      lines.push(current);
+      current = ch;
+    } else {
+      current = test;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
 }
 
 export const GameCanvas: React.FC<GameCanvasProps> = ({
@@ -733,21 +751,24 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       // --- 2. RENDERING PIPELINE ---
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Sky Background: 明亮晨曦 —— 从蜜桃粉到清爽天空蓝，去掉原本压抑的深紫
+      // 每个世界按主题走自己的天空/剪影/远景装饰，不再是所有关卡同一张晨曦天
+      const theme = getThemePalette(levelData.theme);
+
+      // Sky Background
       const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      grad.addColorStop(0, "#ffd6e0");   // 桃粉云端
-      grad.addColorStop(0.35, "#ffe8c2"); // 蜜黄晨光
-      grad.addColorStop(0.7, "#bfe8ff");  // 湖水青
-      grad.addColorStop(1, "#8fd3ff");   // 晴朗蓝天
+      grad.addColorStop(0, theme.sky[0]);
+      grad.addColorStop(0.35, theme.sky[1]);
+      grad.addColorStop(0.7, theme.sky[2]);
+      grad.addColorStop(1, theme.sky[3]);
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // 远景太阳 —— 增加暖调层次
-      ctx.fillStyle = "rgba(255, 224, 130, 0.9)";
+      // 远景太阳 / 月亮
+      ctx.fillStyle = theme.sun.core;
       ctx.beginPath();
       ctx.arc(760 - state.cameraX * 0.05, 90, 34, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "rgba(255, 250, 200, 0.55)";
+      ctx.fillStyle = theme.sun.halo;
       ctx.beginPath();
       ctx.arc(760 - state.cameraX * 0.05, 90, 50, 0, Math.PI * 2);
       ctx.fill();
@@ -755,50 +776,104 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       ctx.save();
       ctx.translate(-Math.floor(state.cameraX), 0);
 
-      // 远景像素城堡塔剪影 —— 从阴暗紫改成浅蓝紫，更清透
-      ctx.fillStyle = "rgba(147, 165, 210, 0.45)";
+      // 远景剪影 —— 按主题换形状：城堡塔楼 / 连绵山丘 / 巨型菌伞 / 尖锐熔岩山峰
+      ctx.fillStyle = theme.silhouette.color;
       const bgSkylineScroll = Math.floor(state.cameraX * 0.15);
       const startSeg = Math.floor((state.cameraX - 400) / 120);
       const endSeg = Math.floor((state.cameraX + 1400) / 120);
       for (let s = startSeg; s <= endSeg; s++) {
         const segX = s * 120 - bgSkylineScroll;
-        const wallH = 130 + (Math.abs(s * 17) % 4) * 16;
-        const topY = 440 - wallH;
-        // Base wall
-        ctx.fillRect(segX, topY, 120, wallH);
-        // Notched battlements
-        ctx.fillRect(segX, topY - 14, 28, 14);
-        ctx.fillRect(segX + 44, topY - 14, 28, 14);
-        ctx.fillRect(segX + 88, topY - 14, 28, 14);
+
+        if (theme.silhouette.style === "towers") {
+          const wallH = 130 + (Math.abs(s * 17) % 4) * 16;
+          const topY = 440 - wallH;
+          ctx.fillRect(segX, topY, 120, wallH);
+          ctx.fillRect(segX, topY - 14, 28, 14);
+          ctx.fillRect(segX + 44, topY - 14, 28, 14);
+          ctx.fillRect(segX + 88, topY - 14, 28, 14);
+        } else if (theme.silhouette.style === "hills") {
+          const hillH = 70 + (Math.abs(s * 23) % 3) * 22;
+          const topY = 440 - hillH;
+          ctx.beginPath();
+          ctx.moveTo(segX, 440);
+          ctx.quadraticCurveTo(segX + 60, topY, segX + 120, 440);
+          ctx.fill();
+          // 小树剪影
+          ctx.fillRect(segX + 50, topY - 18, 8, 26);
+          ctx.beginPath();
+          ctx.arc(segX + 54, topY - 22, 16, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (theme.silhouette.style === "mushrooms") {
+          const capH = 90 + (Math.abs(s * 19) % 3) * 20;
+          const topY = 440 - capH;
+          // 菌伞
+          ctx.beginPath();
+          ctx.arc(segX + 60, topY + 24, 54, Math.PI, 0);
+          ctx.fill();
+          // 菌柄
+          ctx.fillRect(segX + 44, topY + 24, 32, capH - 24);
+        } else {
+          // peaks：尖锐熔岩山峰
+          const peakH = 110 + (Math.abs(s * 29) % 4) * 24;
+          const topY = 440 - peakH;
+          ctx.beginPath();
+          ctx.moveTo(segX, 440);
+          ctx.lineTo(segX + 60, topY);
+          ctx.lineTo(segX + 120, 440);
+          ctx.closePath();
+          ctx.fill();
+        }
       }
 
-      // Parallax Chunky Pixel Clouds (matching image.png)
-      const drawPixelCloud = (cx: number, cy: number) => {
+      // 远景漂浮装饰 —— 按主题换皮：蓬松白云 / 浮游孢子 / 闪烁星光 / 上升余烬
+      const drawSkyDecor = (cx: number, cy: number, time: number) => {
         ctx.save();
-        // Outline & base shape
-        ctx.fillStyle = "#FFFFFF";
-        // Main body stepped pixel blocks
-        ctx.fillRect(cx - 36, cy, 72, 22);
-        ctx.fillRect(cx - 24, cy - 12, 48, 12);
-        ctx.fillRect(cx - 12, cy - 20, 24, 8);
-        ctx.fillRect(cx - 44, cy + 4, 88, 14);
-
-        // Underside pixel shadow (cool light blue-grey like image.png)
-        ctx.fillStyle = "#CBD5E1";
-        ctx.fillRect(cx - 36, cy + 14, 72, 4);
-        ctx.fillRect(cx - 28, cy + 10, 56, 4);
-
-        // Dark pixel border accent
-        ctx.strokeStyle = "#475569";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(cx - 44, cy + 4, 88, 14);
+        if (theme.skyDecor.style === "cloud") {
+          ctx.fillStyle = theme.skyDecor.color;
+          ctx.fillRect(cx - 36, cy, 72, 22);
+          ctx.fillRect(cx - 24, cy - 12, 48, 12);
+          ctx.fillRect(cx - 12, cy - 20, 24, 8);
+          ctx.fillRect(cx - 44, cy + 4, 88, 14);
+          ctx.fillStyle = theme.skyDecor.colorSoft;
+          ctx.fillRect(cx - 36, cy + 14, 72, 4);
+          ctx.fillRect(cx - 28, cy + 10, 56, 4);
+          ctx.strokeStyle = "#475569";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(cx - 44, cy + 4, 88, 14);
+        } else if (theme.skyDecor.style === "spore") {
+          const bob = Math.sin(time * 0.001 + cx) * 10;
+          ctx.fillStyle = theme.skyDecor.colorSoft;
+          ctx.globalAlpha = 0.6;
+          ctx.beginPath();
+          ctx.arc(cx, cy + bob, 14, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = theme.skyDecor.color;
+          ctx.globalAlpha = 0.85;
+          ctx.beginPath();
+          ctx.arc(cx, cy + bob, 6, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (theme.skyDecor.style === "twinkle") {
+          const twinkle = 0.4 + Math.abs(Math.sin(time * 0.002 + cx));
+          ctx.globalAlpha = twinkle;
+          ctx.fillStyle = theme.skyDecor.color;
+          ctx.fillRect(cx - 2, cy - 8, 4, 16);
+          ctx.fillRect(cx - 8, cy - 2, 16, 4);
+        } else {
+          // ember：缓缓上升的火星
+          const rise = ((time * 0.03 + cx) % 300);
+          ctx.globalAlpha = 1 - rise / 300;
+          ctx.fillStyle = theme.skyDecor.color;
+          ctx.beginPath();
+          ctx.arc(cx + Math.sin(time * 0.002 + cx) * 12, cy + 100 - rise, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
         ctx.restore();
       };
 
       for (let i = 0; i < 15; i++) {
-        const cloudX = i * 360 + Math.floor(state.cameraX * 0.35);
-        const cloudY = 70 + ((i * 37) % 80);
-        drawPixelCloud(cloudX, cloudY);
+        const decorX = i * 360 + Math.floor(state.cameraX * 0.35);
+        const decorY = 70 + ((i * 37) % 80);
+        drawSkyDecor(decorX, decorY, currentTime);
       }
 
       // Draw Platform Tiles with authentic Pixel Art texturing (matching image.png)
@@ -807,12 +882,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         const renderY = tile.y + bounceOffset;
 
         if (tile.type === "ground") {
-          // Dirt Body (warm Mario soil brown #78350F)
-          ctx.fillStyle = "#78350F";
+          // Dirt/Stone Body —— 按主题换色
+          ctx.fillStyle = theme.ground.body;
           ctx.fillRect(tile.x, renderY + 16, tile.width, tile.height - 16);
 
-          // Dark Chocolate Pixel Dirt Patches (checker/stepped texture like image.png)
-          ctx.fillStyle = "#451A03";
+          // Dark Pixel Dirt Patches (checker/stepped texture)
+          ctx.fillStyle = theme.ground.patch;
           for (let tx = tile.x; tx < tile.x + tile.width; tx += 16) {
             for (let ty = renderY + 20; ty < renderY + tile.height; ty += 16) {
               if (((tx / 16 + ty / 16) % 2) === 0) {
@@ -822,31 +897,31 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             }
           }
 
-          // Top Bright Green Grass Band (matching image.png #84CC16)
-          ctx.fillStyle = "#84CC16";
+          // Top Band —— 按主题换色（草地绿 / 菌盖粉 / 石砌靛蓝 / 焦黑地壳）
+          ctx.fillStyle = theme.ground.top;
           ctx.fillRect(tile.x, renderY, tile.width, 12);
 
-          // Deep Green Shadow Edge (matching image.png #15803D)
-          ctx.fillStyle = "#15803D";
+          // Shadow Edge
+          ctx.fillStyle = theme.ground.topShadow;
           ctx.fillRect(tile.x, renderY + 12, tile.width, 4);
 
-          // Stepped Pixel Grass Teeth hanging down (matching image.png)
-          ctx.fillStyle = "#65A30D";
+          // Stepped Pixel Teeth hanging down
+          ctx.fillStyle = theme.ground.teeth;
           for (let gx = tile.x; gx < tile.x + tile.width; gx += 16) {
             ctx.fillRect(gx + 2, renderY + 14, 6, 6);
             ctx.fillRect(gx + 10, renderY + 14, 4, 10);
             ctx.fillRect(gx + 12, renderY + 14, 4, 4);
           }
         } else if (tile.type === "grass") {
-          // Floating pixel grass block
-          ctx.fillStyle = "#84CC16";
+          // Floating platform —— 同样跟着主题换色
+          ctx.fillStyle = theme.ground.top;
           ctx.fillRect(tile.x, renderY, tile.width, 10);
-          ctx.fillStyle = "#15803D";
+          ctx.fillStyle = theme.ground.topShadow;
           ctx.fillRect(tile.x, renderY + 10, tile.width, 4);
-          ctx.fillStyle = "#78350F";
+          ctx.fillStyle = theme.ground.body;
           ctx.fillRect(tile.x, renderY + 14, tile.width, tile.height - 14);
-          // Grass teeth
-          ctx.fillStyle = "#65A30D";
+          // Teeth
+          ctx.fillStyle = theme.ground.teeth;
           for (let gx = tile.x; gx < tile.x + tile.width; gx += 12) {
             ctx.fillRect(gx + 2, renderY + 12, 4, 5);
           }
@@ -960,14 +1035,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           ctx.lineWidth = 2;
           ctx.strokeRect(tile.x, renderY, tile.width, tile.height);
         } else if (tile.type === "cloud") {
-          // Fluffy Stepped Pixel Cloud Platform
-          ctx.fillStyle = "#FFFFFF";
+          // 安全平台 —— 按主题换皮：云朵 / 孢子团 / 星之碎晶 / 黑曜岩块
+          ctx.fillStyle = theme.platform.top;
           ctx.fillRect(tile.x + 4, renderY, tile.width - 8, tile.height);
           ctx.fillRect(tile.x, renderY + 4, tile.width, tile.height - 8);
           // Underside shadow
-          ctx.fillStyle = "#CBD5E1";
+          ctx.fillStyle = theme.platform.shadow;
           ctx.fillRect(tile.x + 4, renderY + tile.height - 4, tile.width - 8, 4);
-          ctx.strokeStyle = "#94A3B8";
+          ctx.strokeStyle = theme.platform.outline;
           ctx.lineWidth = 2;
           ctx.strokeRect(tile.x + 2, renderY + 2, tile.width - 4, tile.height - 4);
         }
@@ -1085,21 +1160,76 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       ctx.textAlign = "center";
       ctx.fillText(level.npc?.avatarEmoji || "🧚", npcStationX, 420);
 
-      // Speech bubble hint above NPC —— roundRect 在旧浏览器不存在，做兼容 fallback
-      ctx.fillStyle = "#FEF08A";
-      ctx.beginPath();
-      if (typeof (ctx as any).roundRect === "function") {
-        (ctx as any).roundRect(npcStationX - 50, 350, 100, 26, 6);
-      } else {
-        ctx.rect(npcStationX - 50, 350, 100, 26);
+      // Speech bubble —— 远远走近先冒环境闲话，走到跟前才换成按键提示
+      // roundRect 在旧浏览器不存在，做兼容 fallback
+      const npcDist = Math.abs(player.x - npcStationX);
+      if (npcDist < 420) {
+        const closeEnoughToTalk = npcDist < 80;
+        const ambientLines = level.npc?.ambientLines;
+        let bubbleText: string;
+        if (closeEnoughToTalk) {
+          bubbleText = "💬 [E] 对话";
+        } else if (ambientLines && ambientLines.length > 0) {
+          bubbleText = ambientLines[Math.floor(currentTime / 4000) % ambientLines.length];
+        } else {
+          bubbleText = "...";
+        }
+        // 中文走安全的 CJK 字体链，避免 Press Start 2P 缺字重叠乱码
+        ctx.font = closeEnoughToTalk ? "11px 'Press Start 2P', monospace" : "12px 'ZCOOL KuaiLe', sans-serif";
+        const textWidth = ctx.measureText(bubbleText).width;
+        const bubbleWidth = Math.min(340, Math.max(100, textWidth + 28));
+        const bubbleX = npcStationX - bubbleWidth / 2;
+
+        ctx.fillStyle = "#FEF08A";
+        ctx.beginPath();
+        if (typeof (ctx as any).roundRect === "function") {
+          (ctx as any).roundRect(bubbleX, 350, bubbleWidth, 26, 6);
+        } else {
+          ctx.rect(bubbleX, 350, bubbleWidth, 26);
+        }
+        ctx.fill();
+        ctx.strokeStyle = "#854D0E";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.fillStyle = "#713F12";
+        ctx.textAlign = "center";
+        ctx.fillText(bubbleText, npcStationX, 368, bubbleWidth - 10);
       }
-      ctx.fill();
-      ctx.strokeStyle = "#854D0E";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.fillStyle = "#713F12";
-      ctx.font = "11px 'Press Start 2P', monospace";
-      ctx.fillText("💬 [E] 对话", npcStationX, 368);
+
+      // Draw Lore Plaques —— 纯环境叙事：路过的立牌，走近自动显示文字，不用按键、不弹窗
+      for (const plaque of levelData.lorePlaques ?? []) {
+        ctx.font = "24px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(plaque.icon, plaque.x, plaque.y);
+
+        const plaqueDist = Math.abs(player.x - plaque.x);
+        if (plaqueDist < 160) {
+          ctx.font = "11px 'ZCOOL KuaiLe', sans-serif";
+          const lines = wrapCjkText(ctx, plaque.text, 280);
+          const lineHeight = 18;
+          const boxWidth = Math.min(360, Math.max(...lines.map((l) => ctx.measureText(l).width)) + 28);
+          const boxHeight = lines.length * lineHeight + 14;
+          const boxX = plaque.x - boxWidth / 2;
+          const boxY = plaque.y - 40 - boxHeight;
+
+          ctx.fillStyle = "rgba(255, 247, 236, 0.95)";
+          ctx.beginPath();
+          if (typeof (ctx as any).roundRect === "function") {
+            (ctx as any).roundRect(boxX, boxY, boxWidth, boxHeight, 6);
+          } else {
+            ctx.rect(boxX, boxY, boxWidth, boxHeight);
+          }
+          ctx.fill();
+          ctx.strokeStyle = "#854D0E";
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          ctx.fillStyle = "#3a2410";
+          lines.forEach((line, i) => {
+            ctx.fillText(line, plaque.x, boxY + 20 + i * lineHeight, boxWidth - 10);
+          });
+        }
+      }
 
       // Draw Goal Flagpole & Crystal Portal
       const goalX = levelData.goalX;

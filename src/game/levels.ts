@@ -86,7 +86,16 @@ export function generateWorld1(): LevelConfig {
       personality: "元气热情、热爱闪光宝物",
       dialogue: "欢迎来到像素大陆！按【下方向键】可以下蹲钻过低矮缝隙，还能空中再次按跳跃进行二段跳哦！",
       avatarEmoji: "🧚",
+      ambientLines: [
+        "风里飘着青草香，星星好像就藏在云朵后面！",
+        "听说很久以前，这片平原上也曾有勇者踏过同样的路。",
+        "嘘——你听，风铃草在说悄悄话呢。",
+      ],
     },
+    lorePlaques: [
+      { id: "w1-lore-1", x: 700, y: 416, icon: "🪵", text: "『致初来乍到的旅人：脚下的路由你自己走出来，星光只负责照亮。』" },
+      { id: "w1-lore-2", x: 2700, y: 416, icon: "🗿", text: "『此处曾是旧时代勇者的歇脚地，篝火的温度至今未散。』" },
+    ],
   };
 }
 
@@ -165,7 +174,16 @@ export function generateWorld2(): LevelConfig {
       personality: "沉稳哲理、说话慢吞吞",
       dialogue: "年轻人，弹跳蘑菇已经为你调整了柔和的弹性。如果感到疲惫，随时在我这里的营地休息吧……",
       avatarEmoji: "🍄",
+      ambientLines: [
+        "弹跳蘑菇的孢子落在肩上了，别担心，无毒的。",
+        "年轻人走得这么快，不怕错过沿途的风景吗？",
+        "菌丝网络连着整片幻境，谁也不是孤身一人。",
+      ],
     },
+    lorePlaques: [
+      { id: "w2-lore-1", x: 650, y: 416, icon: "🍄", text: "『菌丝之下皆相连，脚步虽轻，回响很远。』" },
+      { id: "w2-lore-2", x: 2700, y: 416, icon: "🦴", text: "『这片菌林比城堡还要古老，它见过比你更早的旅人。』" },
+    ],
   };
 }
 
@@ -230,7 +248,16 @@ export function generateWorld3(): LevelConfig {
       personality: "高冷优雅、内心温柔",
       dialogue: "能登上这片星夜王座的人少之又少。放轻松，深呼吸，你的OC散发着令人安心的微光呢。",
       avatarEmoji: "✨",
+      ambientLines: [
+        "星光落在你的OC身上了，很好看。",
+        "夜太静，连呼吸声都能听见。",
+        "别怕黑，城堡的影子只是在打盹。",
+      ],
     },
+    lorePlaques: [
+      { id: "w3-lore-1", x: 700, y: 416, icon: "🌌", text: "『当群星连成一线，守门人便会苏醒。』" },
+      { id: "w3-lore-2", x: 2500, y: 416, icon: "⚔️", text: "『某位旅人曾止步于此，星光为他送行。』" },
+    ],
   };
 }
 
@@ -292,7 +319,16 @@ export function generateWorld4(): LevelConfig {
       personality: "威严霸气、惜才如金",
       dialogue: "跨越试炼到达此地的勇者！你与你的OC已经展现了真正的冒险精神！",
       avatarEmoji: "🔥",
+      ambientLines: [
+        "热浪扑面，这才是试炼该有的样子。",
+        "弱者止步于此，强者在此重生。",
+        "凤凰羽翼下的余烬，是前人未竟的荣耀。",
+      ],
     },
+    lorePlaques: [
+      { id: "w4-lore-1", x: 650, y: 416, icon: "🚩", text: "『曾有勇者在此折戟，火焰只留下了他的名字。』" },
+      { id: "w4-lore-2", x: 2400, y: 416, icon: "🖤", text: "『试炼核心之内，唯有真正的勇气能全身而退。』" },
+    ],
   };
 }
 
