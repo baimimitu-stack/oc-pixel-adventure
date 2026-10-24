@@ -321,15 +321,21 @@
                 line-height: 1.35;
             }
             .icon-btn { width: 38px; height: 38px; font-size: 16px; }
-            .tool-switch {
-                flex-wrap: nowrap;
-                overflow-x: auto;
-                scrollbar-width: none;
-                -webkit-overflow-scrolling: touch;
+            /* 9 个工具分两行全部显示：图标在上、文字在下 */
+            .tool-switch { border-radius: 18px; }
+            .tool-btn {
+                flex: 1 1 18%;
+                height: 44px;
+                flex-direction: column;
+                gap: 0;
+                font-size: 10px;
+                padding: 0 2px;
+                border-radius: 14px;
+                white-space: nowrap;
             }
-            .tool-switch::-webkit-scrollbar { display: none; }
-            .tool-btn { flex: none; padding: 0 12px; white-space: nowrap; }
-            .sub-bar { bottom: 122px; }
+            .tb-ico { font-size: 15px; line-height: 1.1; }
+            /* 子面板（颜色、装饰、捏法）选项多时自动换行，不用横向滑 */
+            .sub-bar { bottom: 176px; flex-wrap: wrap; row-gap: 6px; }
             .act-btn { font-size: 12px; }
         }
     </style>
@@ -424,15 +430,15 @@
 
         <!-- 功能模式切换 -->
         <div class="tool-switch">
-            <button class="tool-btn active" id="btnToolAdd" onclick="setMainMode('ADD')"><span>🍨 放冰淇淋</span></button>
-            <button class="tool-btn" id="btnToolPinch" onclick="setMainMode('PINCH')"><span>🤏 捏起来</span></button>
-            <button class="tool-btn" id="btnToolFlatten" onclick="setMainMode('FLATTEN')"><span>🥄 勺背压平</span></button>
-            <button class="tool-btn" id="btnToolSpoon" onclick="setMainMode('SPOON')"><span>🌪️ 旋涡乳化</span></button>
-            <button class="tool-btn" id="btnToolPitcher" onclick="setMainMode('PITCHER')"><span>🥛 金边拉花</span></button>
-            <button class="tool-btn" id="btnToolEtch" onclick="setMainMode('ETCH')"><span>🍫 描边彩笔</span></button>
-            <button class="tool-btn" id="btnToolDeco" onclick="setMainMode('DECO')"><span>🍋 小装饰</span></button>
-            <button class="tool-btn" id="btnToolCup" onclick="setMainMode('CUP')"><span>🎨 画画</span></button>
-            <button class="tool-btn" id="btnToolOrbit" onclick="setMainMode('ORBIT')"><span>🖐️ 转视角</span></button>
+            <button class="tool-btn active" id="btnToolAdd" onclick="setMainMode('ADD')"><span class="tb-ico">🍨</span><span>放冰淇淋</span></button>
+            <button class="tool-btn" id="btnToolPinch" onclick="setMainMode('PINCH')"><span class="tb-ico">🤏</span><span>捏起来</span></button>
+            <button class="tool-btn" id="btnToolFlatten" onclick="setMainMode('FLATTEN')"><span class="tb-ico">🥄</span><span>勺背压平</span></button>
+            <button class="tool-btn" id="btnToolSpoon" onclick="setMainMode('SPOON')"><span class="tb-ico">🌪️</span><span>旋涡乳化</span></button>
+            <button class="tool-btn" id="btnToolPitcher" onclick="setMainMode('PITCHER')"><span class="tb-ico">🥛</span><span>金边拉花</span></button>
+            <button class="tool-btn" id="btnToolEtch" onclick="setMainMode('ETCH')"><span class="tb-ico">🍫</span><span>描边彩笔</span></button>
+            <button class="tool-btn" id="btnToolDeco" onclick="setMainMode('DECO')"><span class="tb-ico">🍋</span><span>小装饰</span></button>
+            <button class="tool-btn" id="btnToolCup" onclick="setMainMode('CUP')"><span class="tb-ico">🎨</span><span>画画</span></button>
+            <button class="tool-btn" id="btnToolOrbit" onclick="setMainMode('ORBIT')"><span class="tb-ico">🖐️</span><span>转视角</span></button>
         </div>
 
         <div class="action-row">
@@ -1716,7 +1722,7 @@
                     if (currentMode === 'CUP' || currentMode === 'ETCH') updateContinuousInteraction();
                 }
 
-                if (e.touches && e.cancelable) e.preventDefault();
+                if (e.touches && e.cancelable && box.contains(e.target)) e.preventDefault();
             }
 
             function handleEnd() {
