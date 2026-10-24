@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>女仆咖啡厅 - 特调蛋包饭工作台</title>
+    <style>
+        /* 严禁使用 vh，全部采用 px 与 % 布局 */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            overflow: hidden;
+            background: #ffeef2;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            position: fixed;
+            user-select: none;
+        }
+
+        #webgl-box {
+            width: 100%; height: 100%;
+            position: absolute; top: 0; left: 0;
+            z-index: 1;
+            touch-action: none; /* 画布上的触摸交给页面，不让浏览器拿去滚动/缩放 */
+        }
+
+        /* 顶部导航与女仆迷你徽章 */
+        .top-nav {
+            position: absolute;
+            top: 15px; left: 15px; right: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 20;
+            pointer-events: none;
+        }
+        .step-pill {
+            background: rgba(255, 255, 255, 0.95);
+            border: 2px solid #ff758f;
+            border-radius: 20px;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #d90429;
+            box-shadow: 0 4px 12px rgba(255, 117, 143, 0.2);
+            pointer-events: auto;
+        }
+        .maid-avatar {
+            width: 44px; height: 44px;
+            border-radius: 22px;
+            background: #ff4d6d;
+            border: 2px solid #fff;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            pointer-events: auto;
+            cursor: pointer;
+        }
+
+        /* 女仆轻量气泡 */
+        .maid-bubble {
+            position: absolute;
+            top: 65px; right: 15px;
+            background: rgba(255,255,255,0.96);
+            border: 2px solid #ffb3c1;
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-size: 13px;
+            color: #444;
+            max-width: 230px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            z-index: 20;
+            display: none;
+            line-height: 1.4;
+        }
+
+        /* 蓄力槽 */
+        .gauge-wrap {
+            position: absolute;
+            top: 75px; right: 15px;
+            width: 10px; height: 110px;
+            background: rgba(255,255,255,0.85);
+            border: 2px solid #ff4d6d;
+            border-radius: 5px;
+            overflow: hidden;
+            z-index: 20;
+            display: none;
+        }
+        .gauge-core {
+            width: 100%; height: 0%;
+            background: linear-gradient(to top, #ff758f, #d90429);
+            position: absolute; bottom: 0;
+            transition: height 0.05s ease-out;
+        }
+
+        /* 底部菜单抽屉 */
+        .menu-drawer {
+            position: absolute;
+            bottom: 12px; left: 10px; right: 10px;
+            background: rgba(255, 255, 255, 0.96);
+            border: 2px solid #ffb3c1;
+            border-radius: 16px;
+            padding: 10px 12px;
+            z-index: 20;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.1);
+        }
+        .menu-title {
+            font-size: 12px;
+            font-weight: bold;
+            color: #d81e5b;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .menu-items {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .menu-btn {
+            flex: 0 0 auto;
+            background: #fff0f3;
+            border: 1px solid #ffccd5;
+            border-radius: 12px;
+            padding: 8px 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            color: #4a4e69;
+        }
+        .menu-btn:active {
+            transform: scale(0.95);
+            background: #ffb3c1;
+        }
+
+        /* 写字阶段快捷栏 */
+        .write-actions {
+            position: absolute;
+            bottom: 20px; left: 15px; right: 15px;
+            display: none;
+            gap: 12px;
+            z-index: 20;
+        }
+        .action-btn {
+            flex: 1; height: 46px;
+            border-radius: 23px;
+            border: none;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+        .btn-clean { background: #fff; color: #555; border: 2px solid #ccc; }
+        .btn-magic { background: linear-gradient(135deg, #ff4d6d, #c9184a); color: #fff; }
+
+        /* 心形特效 */
+        .sparkle-heart {
+            position: absolute;
+            font-size: 24px;
+            pointer-events: none;
+            animation: floatUpAnim 1.2s ease-out forwards;
+            z-index: 99;
+        }
+        @keyframes floatUpAnim {
+            0% { transform: translateY(0) scale(0.5); opacity: 1; }
+            100% { transform: translateY(-90px) scale(1.4); opacity: 0; }
+        }
+
+        /* 手机竖屏：步骤提示保持一行，不压到下面的"咖啡拉花"按钮；底部菜单更紧凑 */
+        @media (max-width: 520px) {
+            .top-nav { top: 12px; left: 10px; right: 10px; }
+            .step-pill {
+                font-size: 12px;
+                padding: 7px 12px;
+                max-width: calc(100% - 56px);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .menu-drawer { bottom: 10px; left: 8px; right: 8px; padding: 8px 10px; }
+            .menu-title { font-size: 11px; gap: 8px; }
+            .menu-btn { padding: 8px 10px; }
+            .write-actions { bottom: 14px; left: 10px; right: 10px; }
+            .maid-bubble { right: 10px; max-width: 70%; }
+        }
+    </style>
+    <script src="./three.min.js"></script>
+</head>
+<body>
+    <a href="./latte.html" style="position:absolute;top:66px;left:15px;z-index:21;background:#fff8ee;color:#8b5035;border:2px solid #e7c4ae;border-radius:20px;padding:9px 15px;text-decoration:none;font-size:13px;font-weight:bold;">☕ 咖啡拉花</a>
+
+    <div class="top-nav">
+        <div class="step-pill" id="stepPill">步骤 1: 投掷米饭底 🍚</div>
+        <div class="maid-avatar" onclick="toggleBubble()">🐱</div>
+    </div>
+
+    <div class="maid-bubble" id="maidBubble">欢迎来到喵喵女仆咖啡厅！新推出了颗颗分明的炒饭和金黄滑蛋包，配菜也会自然散落哦~ 🛎️</div>
+
+    <div class="gauge-wrap" id="gaugeWrap">
+        <div class="gauge-core" id="gaugeCore"></div>
+    </div>
+
+    <div id="webgl-box"></div>
+
+    <div class="menu-drawer" id="menuDrawer">
+        <div class="menu-title">
+            <span id="menuTitle">选择米饭风味（颗颗分明炒饭）：</span>
+            <span id="menuCount" style="color:#ff758f;">6 种米饭底</span>
+        </div>
+        <div class="menu-items" id="menuItems"></div>
+    </div>
+
+    <div class="write-actions" id="writeActions">
+        <button class="action-btn btn-clean" onclick="cleanKetchup()">🧽 重新写</button>
+        <button class="action-btn btn-magic" onclick="castMagicSpell()">✨ 注入美味咒语</button>
+    </div>
+
+    <script>
+        let scene, camera, renderer;
+        let plateGroup, foodMesh, foodTexture, foodCanvas, foodCtx;
+        let bottleAnchor, bottleModel;
+        let droppedObjects = [];
+
+        let currentStep = 'RICE';
+        let currentCoverType = 'bokchoy';
+
+        let isWriting = false;
+        let holdStartTime = 0;
+        let lastCanvasPos = null;
+        let lastHitPoint = null;
+        let currentHit = null;
+        let pressure = 1.0;
+
+        // 相机机位：位置、看向哪里、至少要横向看全多宽（半宽）
+        let camView = { pos: new THREE.Vector3(0, 11, 4.2), target: new THREE.Vector3(0, 0, -0.2), halfWidth: 5.6 };
+
+        // 竖屏手机横向视野很窄：按需要看全的宽度，把相机沿视线方向拉远；桌面端距离不变
+        function fittedCameraPos(pos, target, halfWidth) {
+            const dir = pos.clone().sub(target);
+            const hfov = 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * camera.aspect);
+            const need = halfWidth / Math.tan(hfov / 2);
+            return target.clone().add(dir.setLength(Math.max(dir.length(), need)));
+        }
+
+        function applyCameraView() {
+            camera.position.copy(fittedCameraPos(camView.pos, camView.target, camView.halfWidth));
+            camera.lookAt(camView.target);
+        }
+
+        function init() {
+            const box = document.getElementById('webgl-box');
+            const w = box.clientWidth;
+            const h = box.clientHeight;
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xffeef2);
+
+            camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 100);
+            applyCameraView();
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(w, h);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            box.appendChild(renderer.domElement);
+
+            // 多角度灯光系统
+            const amb = new THREE.AmbientLight(0xffffff, 0.85);
+            scene.add(amb);
+            const mainLight = new THREE.DirectionalLight(0xfff8ee, 0.75);
+            mainLight.position.set(5, 14, 8);
+            mainLight.castShadow = true;
+            scene.add(mainLight);
+
+            const fillLight = new THREE.DirectionalLight(0xffd1dc, 0.4);
+            fillLight.position.set(-6, 8, -4);
+            scene.add(fillLight);
+
+            // 1. 构建女仆咖啡厅专属桌子（粉白格纹蕾丝桌布、金属呼叫铃）
+            buildMaidCafeTable();
+
+            // 2. 构建真实洋食瓷盘
+            buildAuthenticCeramicPlate();
+
+            // 3. 构建人体工学番茄酱挤瓶
+            buildErgonomicKetchupBottle();
+
+            // 4. 加载米饭菜单
+            renderRiceMenu();
+
+            setupTouchAndMouse();
+            window.addEventListener('resize', onResize);
+            animate();
+        }
+
+        // ================= 1. 女仆咖啡厅专属桌子与道具 =================
+        function buildMaidCafeTable() {
+            // A. 生成粉白格子桌布纹理 (Gingham Pattern)
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, 512, 512);
+
+            const sq = 64;
+            ctx.fillStyle = '#ffccd5';
+            for (let y = 0; y < 512; y += sq) {
+                for (let x = 0; x < 512; x += sq) {
+                    if ((x / sq + y / sq) % 2 === 0) {
+                        ctx.fillRect(x, y, sq, sq);
+                    }
+                }
+            }
+            // 半透明粉色交叉线条形成经典英式/日系女仆格纹
+            ctx.fillStyle = 'rgba(255, 77, 109, 0.35)';
+            for (let y = 0; y < 512; y += sq * 2) ctx.fillRect(0, y, 512, sq);
+            for (let x = 0; x < 512; x += sq * 2) ctx.fillRect(x, 0, sq, 512);
+
+            const tableTex = new THREE.CanvasTexture(canvas);
+            tableTex.wrapS = tableTex.wrapT = THREE.RepeatWrapping;
+            tableTex.repeat.set(6, 6);
+
+            // 圆形桌板
+            const tableGeo = new THREE.CylinderGeometry(14, 14, 1, 40);
+            const tableMat = new THREE.MeshStandardMaterial({ 
+                map: tableTex, 
+                roughness: 0.6 
+            });
+            const table = new THREE.Mesh(tableGeo, tableMat);
+            table.position.y = -0.55;
+            table.receiveShadow = true;
+            scene.add(table);
+
+            // B. 女仆唤人铃 (Service Bell 🛎️) - 放在桌旁
+            const bellGroup = new THREE.Group();
+            const bellBase = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.5, 0.55, 0.1, 16),
+                new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.5, roughness: 0.3 })
+            );
+            const bellDome = new THREE.Mesh(
+                new THREE.SphereGeometry(0.42, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.5),
+                new THREE.MeshStandardMaterial({ color: 0xf39c12, metalness: 0.85, roughness: 0.15 })
+            );
+            bellDome.position.y = 0.05;
+            const bellPin = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.06, 0.06, 0.2, 8),
+                new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.9 })
+            );
+            bellPin.position.y = 0.5;
+
+            bellGroup.add(bellBase);
+            bellGroup.add(bellDome);
+            bellGroup.add(bellPin);
+            bellGroup.position.set(-4.5, 0.0, -1.8);
+            scene.add(bellGroup);
+
+            // C. 木质女仆立牌 / 菜单小立牌
+            const signGroup = new THREE.Group();
+            const signStand = new THREE.Mesh(
+                new THREE.BoxGeometry(0.3, 0.08, 0.8),
+                new THREE.MeshStandardMaterial({ color: 0x8d5b4c })
+            );
+            const signCard = new THREE.Mesh(
+                new THREE.BoxGeometry(0.04, 1.2, 0.7),
+                new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 })
+            );
+            signCard.position.y = 0.6;
+            signGroup.add(signStand);
+            signGroup.add(signCard);
+            signGroup.position.set(4.6, 0.0, -1.5);
+            signGroup.rotation.y = -Math.PI / 6;
+            scene.add(signGroup);
+        }
+
+        // ================= 2. 真实洋食陶瓷盘 =================
+        function buildAuthenticCeramicPlate() {
+            plateGroup = new THREE.Group();
+
+            const points = [];
+            points.push(new THREE.Vector2(0, 0.0));
+            points.push(new THREE.Vector2(2.1, 0.05));
+            points.push(new THREE.Vector2(2.6, 0.35));
+            points.push(new THREE.Vector2(3.8, 0.55));
+            points.push(new THREE.Vector2(4.0, 0.52));
+            points.push(new THREE.Vector2(3.8, 0.38));
+            points.push(new THREE.Vector2(2.4, 0.15));
+            points.push(new THREE.Vector2(2.1, -0.12));
+            points.push(new THREE.Vector2(1.9, -0.12));
+            points.push(new THREE.Vector2(1.8, 0.0));
+
+            const plateGeo = new THREE.LatheGeometry(points, 48);
+            const plateMat = new THREE.MeshStandardMaterial({ 
+                color: 0xffffff, 
+                roughness: 0.1,
+                metalness: 0.05
+            });
+
+            const plateMesh = new THREE.Mesh(plateGeo, plateMat);
+            plateMesh.scale.set(1.28, 1.0, 0.98);
+            plateMesh.receiveShadow = true;
+            plateGroup.add(plateMesh);
+
+            scene.add(plateGroup);
+        }
+
+        // ================= 3. 人体工学番茄酱挤压瓶 =================
+        function buildErgonomicKetchupBottle() {
+            bottleAnchor = new THREE.Group();
+            bottleModel = new THREE.Group();
+
+            const tipGeo = new THREE.ConeGeometry(0.12, 0.45, 16);
+            tipGeo.translate(0, 0.225, 0);
+            const tipMat = new THREE.MeshStandardMaterial({ color: 0xffd166, roughness: 0.3 });
+            const tip = new THREE.Mesh(tipGeo, tipMat);
+            tip.rotation.x = Math.PI;
+            bottleModel.add(tip);
+
+            const bodyGeo = new THREE.CylinderGeometry(0.32, 0.38, 1.3, 16);
+            bodyGeo.translate(0, 1.1, 0);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xd90429, roughness: 0.3 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            bottleModel.add(body);
+
+            bottleModel.rotation.x = 0.45;
+            bottleModel.rotation.z = -0.3;
+
+            bottleAnchor.add(bottleModel);
+            bottleAnchor.visible = false;
+            scene.add(bottleAnchor);
+        }
+
+        function dropWithBounce(mesh, targetY, onComplete) {
+            mesh.position.y = 7.0;
+            scene.add(mesh);
+            droppedObjects.push(mesh);
+
+            let vy = -0.16;
+            let gravity = -0.024;
+            let bounce = 0;
+
+            function fall() {
+                vy += gravity;
+                mesh.position.y += vy;
+
+                if (mesh.position.y <= targetY) {
+                    mesh.position.y = targetY;
+                    if (bounce < 2) {
+                        vy = -vy * 0.35;
+                        bounce++;
+                        requestAnimationFrame(fall);
+                    } else {
+                        mesh.position.y = targetY;
+                        if (onComplete) onComplete();
+                    }
+                } else {
+                    requestAnimationFrame(fall);
+                }
+            }
+            fall();
+        }
+
+        // ================= 4. 颗颗分明的真实米饭生成 =================
+        function generateRiceGrainsTexture(baseColorHex, style) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 1024;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = baseColorHex;
+            ctx.fillRect(0, 0, 1024, 1024);
+
+            // 绘制数千颗晶莹紧凑的米粒微小阴影与高光
+            const grainCount = 3000;
+            for (let i = 0; i < grainCount; i++) {
+                const gx = Math.random() * 1024;
+                const gy = Math.random() * 1024;
+                const angle = Math.random() * Math.PI;
+                const length = 10 + Math.random() * 6;
+                const width = 4 + Math.random() * 2;
+
+                ctx.save();
+                ctx.translate(gx, gy);
+                ctx.rotate(angle);
+
+                // 米粒缝隙阴影
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
+                ctx.beginPath();
+                ctx.ellipse(1, 1, length / 2, width / 2, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 米粒本体
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.beginPath();
+                ctx.ellipse(0, 0, length / 2, width / 2, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 米粒高光反射点
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                ctx.beginPath();
+                ctx.ellipse(-1, -1, length / 3, width / 4, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+
+            // 如果是黄金炒饭或茄汁饭，随机混入碎炒蛋、胡萝卜丁与葱花
+            if (style === 'fried' || style === 'tomato') {
+                for (let j = 0; j < 300; j++) {
+                    const cx = Math.random() * 1024;
+                    const cy = Math.random() * 1024;
+                    const cType = Math.random();
+                    if (cType < 0.45) {
+                        ctx.fillStyle = '#ffbe0b'; // 炒蛋小颗粒
+                        ctx.fillRect(cx, cy, 6, 6);
+                    } else if (cType < 0.75) {
+                        ctx.fillStyle = '#2a9d8f'; // 葱花碎
+                        ctx.fillRect(cx, cy, 5, 5);
+                    } else {
+                        ctx.fillStyle = '#e76f51'; // 甜胡萝卜丁
+                        ctx.fillRect(cx, cy, 6, 6);
+                    }
+                }
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(2, 2);
+            return tex;
+        }
+
+        // ================= 菜单系统 =================
+
+        // 步骤 1：米饭底（颗颗分明）
+        function renderRiceMenu() {
+            document.getElementById('stepPill').innerText = "步骤 1: 投掷米饭底 🍚";
+            document.getElementById('menuTitle').innerText = "选择米饭风味（颗颗分明）：";
+            document.getElementById('menuCount').innerText = "6 种米粒底";
+
+            const riceList = [
+                { id: 'fried', name: '🍳 黄金炒饭', desc: '金黄蛋碎·葱香四溢', hex: '#f4a261', style: 'fried' },
+                { id: 'white', name: '🍚 珍珠白米', desc: '软糯分明·晶莹饱满', hex: '#fbfbfb', style: 'plain' },
+                { id: 'tomato', name: '🍅 浓香茄汁', desc: '酸甜入味·胡萝卜丁', hex: '#e76f51', style: 'tomato' },
+                { id: 'truffle', name: '🍄 松露菌菇', desc: '粒粒裹油·黑松露碎', hex: '#d3cbb8', style: 'plain' },
+                { id: 'corn', name: '🌽 甜玉米饭', desc: '脆甜玉米·金黄点缀', hex: '#f4d06f', style: 'plain' },
+                { id: 'matcha', name: '🍵 翡翠茶饭', desc: '淡雅米香·清幽抹茶', hex: '#b5c99a', style: 'plain' }
+            ];
+
+            let html = '';
+            riceList.forEach(r => {
+                html += `<button class="menu-btn" onclick="tossRice('${r.hex}', '${r.style}')">
+                    <span>${r.name}</span>
+                    <span style="font-size:10px;color:#888;">${r.desc}</span>
+                </button>`;
+            });
+            document.getElementById('menuItems').innerHTML = html;
+        }
+
+        function tossRice(hex, style) {
+            const riceTexture = generateRiceGrainsTexture(hex, style);
+
+            const geo = new THREE.SphereGeometry(2.0, 36, 20, 0, Math.PI * 2, 0, Math.PI * 0.45);
+            const mat = new THREE.MeshStandardMaterial({ 
+                map: riceTexture,
+                bumpMap: riceTexture,
+                bumpScale: 0.08, // 呈现明显的米粒凹凸立体感
+                roughness: 0.65 
+            });
+
+            const rice = new THREE.Mesh(geo, mat);
+            rice.scale.set(1.42, 0.65, 0.9);
+
+            dropWithBounce(rice, 0.1, () => {
+                renderCoverMenu();
+            });
+        }
+
+        // 步骤 2：蔬菜被 & 经典蛋包菜单
+        function renderCoverMenu() {
+            document.getElementById('stepPill').innerText = "步骤 2: 投掷蛋皮/蔬菜被 🍳";
+            document.getElementById('menuTitle').innerText = "选择盖被（新增金黄松软蛋包）：";
+            document.getElementById('menuCount').innerText = "8 款任选";
+
+            const coverList = [
+                // 蛋包饭经典蛋皮
+                { id: 'classic_egg', name: '🍳 经典金黄松软蛋皮', desc: '软嫩金黄·黄油香气' },
+                { id: 'creamy_egg', name: '✨ 绝品流心滑蛋被', desc: '半熟褶皱·滑嫩柔润' },
+                // 蔬菜被
+                { id: 'bokchoy', name: '🥬 翡翠大青菜被', desc: '清新鲜脆·整片水润' },
+                { id: 'cabbage', name: '🥗 梦幻紫甘蓝被', desc: '华丽深紫·花青素' },
+                { id: 'spinach', name: '🌿 浓香菠菜茸被', desc: '深翠软糯·营养满满' },
+                { id: 'carrot', name: '🥕 暖阳胡萝卜被', desc: '温润甜美·橙光微甜' },
+                { id: 'cucumber', name: '🥒 翠玉青瓜薄片', desc: '爽脆多汁·清爽解腻' },
+                { id: 'pumpkin', name: '🎃 金灿蜜南瓜被', desc: '绵密甘甜·浓郁厚实' }
+            ];
+
+            let html = '';
+            coverList.forEach(c => {
+                html += `<button class="menu-btn" onclick="tossCover('${c.id}')">
+                    <span>${c.name}</span>
+                    <span style="font-size:10px;color:#888;">${c.desc}</span>
+                </button>`;
+            });
+            document.getElementById('menuItems').innerHTML = html;
+        }
+
+        // 正交平面 UV 保持严格左右一致与无变形
+        function applyStrictPlanarUVs(geometry, sx, sz) {
+            const pos = geometry.attributes.position;
+            const uv = geometry.attributes.uv;
+
+            const minX = -2.15 * sx;
+            const maxX =  2.15 * sx;
+            const minZ = -2.15 * sz;
+            const maxZ =  2.15 * sz;
+
+            for (let i = 0; i < pos.count; i++) {
+                const vx = pos.getX(i) * sx;
+                const vz = pos.getZ(i) * sz;
+                const u = (vx - minX) / (maxX - minX);
+                const v = 1 - (vz - minZ) / (maxZ - minZ);
+                uv.setXY(i, u, v);
+            }
+            uv.needsUpdate = true;
+        }
+
+        function tossCover(type) {
+            currentCoverType = type;
+
+            foodCanvas = document.createElement('canvas');
+            foodCanvas.width = 2048;
+            foodCanvas.height = 2048;
+            foodCtx = foodCanvas.getContext('2d');
+            renderCoverTexture(type);
+
+            foodTexture = new THREE.CanvasTexture(foodCanvas);
+
+            const geo = new THREE.SphereGeometry(2.15, 48, 32, 0, Math.PI * 2, 0, Math.PI * 0.44);
+            const scaleX = 1.48;
+            const scaleY = 0.7;
+            const scaleZ = 0.94;
+
+            applyStrictPlanarUVs(geo, scaleX, scaleZ);
+
+            const mat = new THREE.MeshStandardMaterial({ 
+                map: foodTexture, 
+                roughness: type.includes('egg') ? 0.35 : 0.5, // 蛋皮有微润的油光
+                bumpScale: 0.05
+            });
+
+            foodMesh = new THREE.Mesh(geo, mat);
+            foodMesh.scale.set(scaleX, scaleY, scaleZ);
+
+            dropWithBounce(foodMesh, 0.14, () => {
+                renderToppingMenu();
+            });
+        }
+
+        // 绘制蛋皮与各色蔬菜纹理
+        function renderCoverTexture(type) {
+            if (type === 'classic_egg') { // 经典金黄蛋皮
+                foodCtx.fillStyle = '#ffbe0b';
+                foodCtx.fillRect(0, 0, 2048, 2048);
+                // 柔和的微焦黄与黄油亮痕
+                foodCtx.strokeStyle = '#f39c12';
+                foodCtx.lineWidth = 26;
+                for (let i = 0; i < 15; i++) {
+                    foodCtx.beginPath();
+                    let x = 1024 + (i - 7) * 140;
+                    foodCtx.moveTo(x, 150);
+                    foodCtx.bezierCurveTo(x + 50, 700, x - 50, 1300, x, 1950);
+                    foodCtx.stroke();
+                }
+                // 黄油高光亮斑
+                foodCtx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                for (let k = 0; k < 30; k++) {
+                    foodCtx.beginPath();
+                    foodCtx.ellipse(Math.random() * 2048, Math.random() * 2048, 80, 30, Math.PI / 4, 0, Math.PI * 2);
+                    foodCtx.fill();
+                }
+            } else if (type === 'creamy_egg') { // 绝品流心滑蛋被
+                foodCtx.fillStyle = '#ffcf33';
+                foodCtx.fillRect(0, 0, 2048, 2048);
+                // 半熟蛋褶皱波浪
+                foodCtx.strokeStyle = '#f0a500';
+                foodCtx.lineWidth = 32;
+                for (let i = 0; i < 22; i++) {
+                    foodCtx.beginPath();
+                    let y = 100 + i * 90;
+                    foodCtx.moveTo(200, y);
+                    foodCtx.bezierCurveTo(700, y + 40, 1300, y - 40, 1850, y);
+                    foodCtx.stroke();
+                }
+            } else if (type === 'bokchoy') { // 大青菜
+                foodCtx.fillStyle = '#3a8043';
+                foodCtx.fillRect(0, 0, 2048, 2048);
+                foodCtx.strokeStyle = '#275d30';
+                foodCtx.lineWidth = 24;
+                for(let i = 0; i < 20; i++) {
+                    foodCtx.beginPath();
+                    let x = 1024 + (i - 10) * 105;
+                    foodCtx.moveTo(x, 100);
+                    foodCtx.bezierCurveTo(x + 70, 700, x - 70, 1300, x, 1950);
+                    foodCtx.stroke();
+                }
+            } else if (type === 'cabbage') { // 紫甘蓝
+                foodCtx.fillStyle = '#6a2c70';
+                foodCtx.fillRect(0, 0, 2048, 2048);
+                foodCtx.strokeStyle = '#b83b5e';
+                foodCtx.lineWidth = 22;
+                for(let i = 0; i < 18; i++) {
+                    foodCtx.beginPath();
+                    let x = 1024 + (i - 9) * 110;
+                    foodCtx.moveTo(x, 100);
+                    foodCtx.lineTo(x + 40, 1950);
+                    foodCtx.stroke();
+                }
+            } else if (type === 'spinach') { // 菠菜茸
+                foodCtx.fillStyle = '#225735';
+                foodCtx.fillRect(0, 0, 2048, 2048);
+                for(let i = 0; i < 800; i++) {
+                    foodCtx.fillStyle = (i % 2 === 0) ? '#2d6a4f' : '#1b4332';
+                    foodCtx.beginPath();
+                    foodCtx.arc(Math.random()*2048, Math.random()*2048, 8 + Math.random()*15, 0, Math.PI*2);
+                    foodCtx.fill();
+                }
+            } else if (type === 'carrot') { // 胡萝卜
+                foodCtx.fillStyle = '#e76f51';
+                foodCtx.fillRect(0, 0, 2048, 2048);
+                foodCtx.strokeStyle = '#f4a261';
+                foodCtx.lineWidth = 18;
+                for(let i = 0; i < 16; i++) {
+                    let y = 200 + i * 110;
+                    foodCtx.beginPath();
+                    foodCtx.moveTo(100, y);
+                    foodCtx.lineTo(1948, y + 20);
+                    foodCtx.stroke();
+                }
+            } else if (type === 'cucumber') { // 青瓜片
+                foodCtx.fillStyle = '#74c69d';
+                foodCtx.fillRect(0, 0, 2048, 2048);
+                foodCtx.fillStyle = '#52b788';
+                for(let i = 0; i < 10; i++) {
+                    foodCtx.fillRect(i * 210, 0, 90, 2048);
+                }
+            } else { // 南瓜
+                foodCtx.fillStyle = '#f39c12';
+                foodCtx.fillRect(0, 0, 2048, 2048);
+                foodCtx.fillStyle = '#f1c40f';
+                for(let i = 0; i < 40; i++) {
+                    foodCtx.beginPath();
+                    foodCtx.arc(Math.random()*2048, Math.random()*2048, 40 + Math.random()*60, 0, Math.PI*2);
+                    foodCtx.fill();
+                }
+            }
+        }
+
+        // 步骤 3：边盘配料（高度随机性：数量、大小、朝向、位置全随机）
+        function renderToppingMenu() {
+            document.getElementById('stepPill').innerText = "步骤 3: 投掷配料 🍅 (随机散落)";
+            document.getElementById('menuTitle').innerText = "点击添加边盘小食（多数量与姿态随机生成）：";
+            document.getElementById('menuCount').innerText = "7 种配料";
+
+            const toppings = [
+                { id: 'tomato', name: '🍅 樱桃小番茄' },
+                { id: 'broccoli', name: '🥦 脆嫩西蓝花' },
+                { id: 'sausage', name: '🐙 章鱼小香肠' },
+                { id: 'shrimp', name: '🍤 黄金炸虾' },
+                { id: 'cheese', name: '🧀 融化芝士片' },
+                { id: 'mushroom', name: '🍄 煎烤小口蘑' },
+                { id: 'cornbaby', name: '🌽 脆甜玉米笋' }
+            ];
+
+            let html = '';
+            toppings.forEach(t => {
+                html += `<button class="menu-btn" onclick="tossRandomizedTopping('${t.id}')">
+                    <span>${t.name}</span>
+                </button>`;
+            });
+            html += `<button class="menu-btn" style="background:#ff4d6d; color:#fff;" onclick="enterWritingStep()">
+                <span>✍️ 摆好了，挤番茄酱！</span>
+            </button>`;
+            document.getElementById('menuItems').innerHTML = html;
+        }
+
+        // 【核心改动：更具生命力与自然感的随机配菜投掷系统】
+        function tossRandomizedTopping(type) {
+            // 每次点击随机抛下 1 到 2 份配料（小番茄可能一次滚出两颗）
+            const spawnCount = (type === 'tomato' || type === 'mushroom') ? (Math.random() > 0.4 ? 2 : 1) : 1;
+
+            for (let k = 0; k < spawnCount; k++) {
+                setTimeout(() => {
+                    let mesh;
+
+                    // 1. 位置随机散布在盘子两侧凹槽或边缘，角度全随机分布
+                    const side = Math.random() > 0.5 ? 1 : -1;
+                    const posX = side * (2.6 + Math.random() * 0.7);
+                    const posZ = (Math.random() - 0.5) * 2.2;
+
+                    // 2. 尺寸大小比例随机 (0.8x ~ 1.25x)
+                    const s = 0.85 + Math.random() * 0.35;
+
+                    // 3. 随机翻滚角度 (Yaw / Pitch / Roll 任意倾斜)
+                    const rotX = Math.random() * Math.PI * 2;
+                    const rotY = Math.random() * Math.PI * 2;
+                    const rotZ = Math.random() * Math.PI * 2;
+
+                    if (type === 'tomato') {
+                        mesh = new THREE.Mesh(
+                            new THREE.SphereGeometry(0.32 * s, 16, 16),
+                            new THREE.MeshStandardMaterial({ color: 0xee1c24, roughness: 0.15 })
+                        );
+                    } else if (type === 'broccoli') {
+                        mesh = new THREE.Mesh(
+                            new THREE.DodecahedronGeometry(0.36 * s),
+                            new THREE.MeshStandardMaterial({ color: 0x2d6a4f, roughness: 0.8 })
+                        );
+                    } else if (type === 'sausage') {
+                        mesh = new THREE.Mesh(
+                            new THREE.CylinderGeometry(0.16 * s, 0.16 * s, 0.55 * s, 12),
+                            new THREE.MeshStandardMaterial({ color: 0xd90429, roughness: 0.4 })
+                        );
+                    } else if (type === 'shrimp') {
+                        mesh = new THREE.Mesh(
+                            new THREE.CylinderGeometry(0.15 * s, 0.26 * s, 1.0 * s, 10),
+                            new THREE.MeshStandardMaterial({ color: 0xf4a261, roughness: 0.9 })
+                        );
+                    } else if (type === 'cheese') {
+                        mesh = new THREE.Mesh(
+                            new THREE.BoxGeometry(0.7 * s, 0.08, 0.7 * s),
+                            new THREE.MeshStandardMaterial({ color: 0xffd166, roughness: 0.4 })
+                        );
+                    } else if (type === 'mushroom') {
+                        mesh = new THREE.Mesh(
+                            new THREE.SphereGeometry(0.3 * s, 12, 12, 0, Math.PI * 2, 0, Math.PI * 0.5),
+                            new THREE.MeshStandardMaterial({ color: 0xa89984, roughness: 0.6 })
+                        );
+                    } else { // 玉米笋
+                        mesh = new THREE.Mesh(
+                            new THREE.ConeGeometry(0.16 * s, 1.1 * s, 10),
+                            new THREE.MeshStandardMaterial({ color: 0xffe066, roughness: 0.5 })
+                        );
+                    }
+
+                    mesh.position.set(posX, 6.5, posZ);
+                    mesh.rotation.set(rotX, rotY, rotZ);
+                    dropWithBounce(mesh, 0.2);
+                }, k * 120);
+            }
+        }
+
+        // 步骤 4：写字
+        function enterWritingStep() {
+            currentStep = 'WRITE';
+            document.getElementById('menuDrawer').style.display = 'none';
+            document.getElementById('writeActions').style.display = 'flex';
+            document.getElementById('gaugeWrap').style.display = 'block';
+            document.getElementById('stepPill').innerText = "🍅 按住蓄力写字 | 手指在哪，酱在哪！";
+
+            bottleAnchor.visible = true;
+
+            // 写字时只需看全蛋包饭本身：手机上相机会拉近一些，字更好写；桌面端不动
+            camView.halfWidth = 3.6;
+            cameraTween(fittedCameraPos(camView.pos, camView.target, camView.halfWidth), camView.target, 600);
+        }
+
+        function updateWritingPhysics() {
+            if (!isWriting || !currentHit) return;
+
+            const now = performance.now();
+            const holdSec = (now - holdStartTime) / 1000;
+
+            pressure = Math.min(1.0 + holdSec * 2.2, 3.6);
+
+            const fillPct = Math.min((pressure - 1) / 2.6 * 100, 100);
+            document.getElementById('gaugeCore').style.height = fillPct + '%';
+
+            const sq = 1 - Math.min((pressure - 1) * 0.08, 0.2);
+            bottleModel.scale.set(sq, 1, sq);
+
+            bottleAnchor.position.copy(currentHit.point);
+
+            if (lastHitPoint) {
+                const moveDx = currentHit.point.x - lastHitPoint.x;
+                const moveDz = currentHit.point.z - lastHitPoint.z;
+                const speed = Math.hypot(moveDx, moveDz);
+
+                if (speed > 0.005) {
+                    bottleModel.rotation.z = -0.3 + THREE.MathUtils.clamp(moveDx * 1.5, -0.2, 0.2);
+                    bottleModel.rotation.x = 0.45 + THREE.MathUtils.clamp(moveDz * 1.5, -0.2, 0.2);
+                }
+            }
+            lastHitPoint = currentHit.point.clone();
+
+            const cPos = {
+                x: currentHit.uv.x * 2048,
+                y: (1 - currentHit.uv.y) * 2048
+            };
+
+            if (pressure > 2.6 && Math.random() < 0.45) {
+                spawnSplatter(cPos.x, cPos.y);
+            }
+
+            const lineWidth = 30 * pressure;
+            foodCtx.lineCap = 'round';
+            foodCtx.lineJoin = 'round';
+
+            if (lastCanvasPos) {
+                const dist = Math.hypot(cPos.x - lastCanvasPos.x, cPos.y - lastCanvasPos.y);
+                if (dist > 6) {
+                    foodCtx.strokeStyle = '#8a0011';
+                    foodCtx.lineWidth = lineWidth + 10;
+                    foodCtx.beginPath();
+                    foodCtx.moveTo(lastCanvasPos.x, lastCanvasPos.y);
+                    foodCtx.lineTo(cPos.x, cPos.y);
+                    foodCtx.stroke();
+
+                    foodCtx.strokeStyle = '#d90429';
+                    foodCtx.lineWidth = lineWidth;
+                    foodCtx.beginPath();
+                    foodCtx.moveTo(lastCanvasPos.x, lastCanvasPos.y);
+                    foodCtx.lineTo(cPos.x, cPos.y);
+                    foodCtx.stroke();
+
+                    foodCtx.strokeStyle = '#ff758f';
+                    foodCtx.lineWidth = lineWidth * 0.25;
+                    foodCtx.beginPath();
+                    foodCtx.moveTo(lastCanvasPos.x - 3, lastCanvasPos.y - 3);
+                    foodCtx.lineTo(cPos.x - 3, cPos.y - 3);
+                    foodCtx.stroke();
+
+                    lastCanvasPos = cPos;
+                }
+            } else {
+                foodCtx.fillStyle = '#d90429';
+                foodCtx.beginPath();
+                foodCtx.arc(cPos.x, cPos.y, lineWidth * 0.5, 0, Math.PI * 2);
+                foodCtx.fill();
+                lastCanvasPos = cPos;
+            }
+
+            foodTexture.needsUpdate = true;
+        }
+
+        function spawnSplatter(cx, cy) {
+            const count = Math.floor(Math.random() * 3) + 2;
+            for(let i = 0; i < count; i++) {
+                const a = Math.random() * Math.PI * 2;
+                const d = 40 + Math.random() * 80;
+                const sx = cx + Math.cos(a) * d;
+                const sy = cy + Math.sin(a) * d;
+                const r = Math.random() * 6 + 2;
+
+                foodCtx.fillStyle = '#b3001b';
+                foodCtx.beginPath();
+                foodCtx.arc(sx, sy, r, 0, Math.PI * 2);
+                foodCtx.fill();
+
+                foodCtx.fillStyle = '#ff758f';
+                foodCtx.beginPath();
+                foodCtx.arc(sx - 1, sy - 1, r * 0.4, 0, Math.PI * 2);
+                foodCtx.fill();
+            }
+        }
+
+        function cleanKetchup() {
+            renderCoverTexture(currentCoverType);
+            foodTexture.needsUpdate = true;
+        }
+
+        // --- 触屏与射线交互 ---
+        const raycaster = new THREE.Raycaster();
+        const pointerNDC = new THREE.Vector2();
+
+        function setupTouchAndMouse() {
+            const box = document.getElementById('webgl-box');
+
+            function getCoords(cx, cy) {
+                const rect = renderer.domElement.getBoundingClientRect();
+                pointerNDC.x = ((cx - rect.left) / rect.width) * 2 - 1;
+                pointerNDC.y = -((cy - rect.top) / rect.height) * 2 + 1;
+            }
+
+            function handleDown(e) {
+                // 拦住触摸后浏览器补发的鼠标事件，否则一次点按会被当成两次
+                if (e.touches && e.cancelable) e.preventDefault();
+                if (currentStep !== 'WRITE') return;
+                isWriting = true;
+                holdStartTime = performance.now();
+                pressure = 1.0;
+                lastCanvasPos = null;
+                lastHitPoint = null;
+
+                const pt = e.touches ? e.touches[0] : e;
+                getCoords(pt.clientX, pt.clientY);
+                raycastFood();
+            }
+
+            function handleMove(e) {
+                if (currentStep !== 'WRITE') return;
+                const pt = e.touches ? e.touches[0] : e;
+                getCoords(pt.clientX, pt.clientY);
+                raycastFood();
+                if (e.touches && e.cancelable) e.preventDefault();
+            }
+
+            function handleUp() {
+                isWriting = false;
+                lastCanvasPos = null;
+                lastHitPoint = null;
+                document.getElementById('gaugeCore').style.height = '0%';
+                if (bottleModel) bottleModel.scale.set(1, 1, 1);
+            }
+
+            box.addEventListener('mousedown', handleDown);
+            window.addEventListener('mousemove', handleMove);
+            window.addEventListener('mouseup', handleUp);
+
+            box.addEventListener('touchstart', handleDown, { passive: false });
+            window.addEventListener('touchmove', handleMove, { passive: false });
+            window.addEventListener('touchend', handleUp);
+            window.addEventListener('touchcancel', handleUp);
+        }
+
+        function raycastFood() {
+            if (!foodMesh) return;
+            raycaster.setFromCamera(pointerNDC, camera);
+            const hits = raycaster.intersectObject(foodMesh);
+
+            if (hits.length > 0) {
+                currentHit = hits[0];
+                bottleAnchor.position.copy(hits[0].point);
+            } else {
+                currentHit = null;
+            }
+        }
+
+        function castMagicSpell() {
+            currentStep = 'DONE';
+            bottleAnchor.visible = false;
+            document.getElementById('writeActions').style.display = 'none';
+            document.getElementById('gaugeWrap').style.display = 'none';
+            document.getElementById('stepPill').innerText = "✨ 变得美味吧~ 萌萌啾！💖";
+
+            for (let i = 0; i < 25; i++) {
+                setTimeout(() => {
+                    const sp = document.createElement('div');
+                    sp.className = 'sparkle-heart';
+                    sp.innerText = ['💖', '🍅', '✨', '🍳'][Math.floor(Math.random() * 4)];
+                    sp.style.left = (Math.random() * (window.innerWidth - 60) + 30) + 'px';
+                    sp.style.top = (window.innerHeight * 0.5 + (Math.random() * 80 - 40)) + 'px';
+                    document.body.appendChild(sp);
+                    setTimeout(() => sp.remove(), 1200);
+                }, i * 65);
+            }
+
+            camView = { pos: new THREE.Vector3(0, 5.5, 6.2), target: new THREE.Vector3(0, 0.2, 0), halfWidth: 5.6 };
+            cameraTween(fittedCameraPos(camView.pos, camView.target, camView.halfWidth), camView.target, 1400);
+
+            setTimeout(() => {
+                const b = document.getElementById('maidBubble');
+                b.style.display = 'block';
+                b.innerHTML = "主人亲手定制的特调料理完成啦！颗颗分明的炒饭搭配专属文字，让人超有食欲~ <br><button onclick='location.reload()' style='margin-top:8px;border:none;background:#ff4d6d;color:#fff;border-radius:12px;padding:6px 12px;font-size:12px;cursor:pointer;'>再做一份新料理</button>";
+            }, 1800);
+        }
+
+        function toggleBubble() {
+            const b = document.getElementById('maidBubble');
+            b.style.display = b.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function cameraTween(to, target, dur) {
+            const startP = camera.position.clone();
+            const startT = performance.now();
+            function run() {
+                const p = Math.min((performance.now() - startT) / dur, 1);
+                const ease = 1 - Math.pow(1 - p, 3);
+                camera.position.lerpVectors(startP, new THREE.Vector3(to.x, to.y, to.z), ease);
+                camera.lookAt(target.x, target.y, target.z);
+                if (p < 1) requestAnimationFrame(run);
+            }
+            run();
+        }
+
+        function onResize() {
+            const box = document.getElementById('webgl-box');
+            camera.aspect = box.clientWidth / box.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(box.clientWidth, box.clientHeight);
+            applyCameraView(); // 横竖屏切换后重新按宽度取景
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updateWritingPhysics();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>

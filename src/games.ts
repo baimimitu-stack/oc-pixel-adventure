@@ -12,6 +12,30 @@ export interface GameEntry {
 /** 游戏盒子收录的全部游戏，以后加新游戏就往这个数组里追加一项 */
 export const GAMES: GameEntry[] = [
   {
+    id: "canteen",
+    path: "/games/canteen/index.html",
+    title: "今日食堂",
+    tagline: "排队点菜、装盘交餐，菜品图片和名字由你定义",
+    cover: "/games/canteen/cover.svg",
+    tags: ["打饭试玩", "自定义菜品", "美术待定"],
+  },
+  {
+    id: "maid-cafe",
+    path: "/games/maid-cafe/index.html",
+    title: "女仆咖啡厅",
+    tagline: "搭配米饭与滑蛋，用番茄酱写下专属的美味咒语",
+    cover: "/games/maid-cafe/cover.svg",
+    tags: ["料理制作", "3D互动", "自由涂鸦"],
+  },
+  {
+    id: "ice-cream-latte",
+    path: "/games/ice-cream-latte/index.html",
+    title: "冰淇淋拉花工坊",
+    tagline: "放上各色冰淇淋球，拉花、捏尖、摆装饰，还能在杯子上画画",
+    cover: "/games/ice-cream-latte/cover.svg",
+    tags: ["甜品制作", "3D互动", "自由涂鸦"],
+  },
+  {
     id: "oc-pixel-adventure",
     path: "/games/oc-pixel-adventure",
     title: "像素冒险物语",

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450">
+<rect width="800" height="450" fill="#ffeef2"/>
+<path d="M0 65H800M0 145H800M0 225H800M0 305H800M0 385H800M80 0V450M240 0V450M400 0V450M560 0V450M720 0V450" stroke="#ffd8e2" stroke-width="24"/>
+<ellipse cx="400" cy="345" rx="250" ry="58" fill="#eab3c0"/>
+<ellipse cx="400" cy="335" rx="250" ry="58" fill="#fff"/>
+<path d="M245 230C250 300 300 340 400 340C500 340 550 300 555 230Z" fill="#fff" stroke="#f1d3dc" stroke-width="5"/>
+<path d="M552 248C610 240 622 300 560 300" fill="none" stroke="#fff" stroke-width="20" stroke-linecap="round"/>
+<path d="M552 248C610 240 622 300 560 300" fill="none" stroke="#f1d3dc" stroke-width="4" stroke-linecap="round"/>
+<ellipse cx="400" cy="230" rx="155" ry="38" fill="#6b2f12"/>
+<path d="M330 232C360 214 380 236 400 222C420 236 440 214 470 232" fill="none" stroke="#f3d29b" stroke-width="6" stroke-linecap="round"/>
+<circle cx="345" cy="188" r="52" fill="#ff9ebb"/>
+<circle cx="455" cy="190" r="50" fill="#88c278"/>
+<circle cx="400" cy="150" r="54" fill="#fffcf0"/>
+<path d="M372 140C390 128 410 152 428 138" fill="none" stroke="#e8334a" stroke-width="7" stroke-linecap="round"/>
+<circle cx="470" cy="160" r="15" fill="#ffd93b" stroke="#fff1a6" stroke-width="5"/>
+<circle cx="333" cy="160" r="11" fill="#c1121f"/>
+<path d="M333 149C336 136 344 130 352 128" fill="none" stroke="#5b8c3a" stroke-width="3"/>
+<text x="400" y="62" text-anchor="middle" font-family="sans-serif" font-size="38" font-weight="bold" fill="#b73555">冰淇淋拉花工坊</text>
+<text x="400" y="418" text-anchor="middle" font-family="sans-serif" font-size="24" fill="#b73555">女仆咖啡厅 · 甜品时间</text>
+</svg>

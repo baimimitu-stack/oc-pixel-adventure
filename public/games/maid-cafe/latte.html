@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>女仆咖啡厅 · 咖啡拉花</title>
+<style>
+*{box-sizing:border-box}body{margin:0;color:#704735;font-family:system-ui,sans-serif;background:#fff1ed;background-image:linear-gradient(90deg,#ffffff66 50%,transparent 50%),linear-gradient(#ffffff66 50%,transparent 50%);background-size:64px 64px}
+main{max-width:760px;margin:auto;padding:18px 18px 30px}header{display:flex;justify-content:space-between;align-items:center;gap:12px}a{color:#8a5141;text-decoration:none;font-size:13px;background:#fffaf5;border:1px solid #e7c7b9;padding:10px 14px;border-radius:24px}h1{font-size:22px;margin:20px 0 6px;text-align:center}p{text-align:center;font-size:14px;margin:8px 0;color:#996a57}
+.stage{width:min(100%,470px);margin:8px auto;position:relative}canvas{width:100%;height:auto;display:block;touch-action:none;cursor:crosshair;filter:drop-shadow(0 14px 16px #936b5829)}
+.panel{background:#fffdf9ed;border:2px solid #edccbb;border-radius:24px;padding:16px;box-shadow:0 8px 24px #97624e10}.row{display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0}button{font:inherit;font-size:14px;padding:10px 15px;border-radius:18px;border:1px solid #e6c6b5;background:#fff5ed;color:#754631;cursor:pointer;min-height:42px}button[aria-pressed=true]{background:#89593f;color:white;border-color:#89593f}button:disabled{opacity:.45;cursor:default}.primary{background:#ce7385;color:#fff;border-color:#ce7385}label{font-size:13px;display:flex;gap:8px;align-items:center}input{accent-color:#a36a4c;width:110px}#status{min-height:22px;font-size:13px}button:focus-visible,a:focus-visible{outline:3px solid #ce7385;outline-offset:3px}@media(max-height:700px){.stage{max-width:310px}h1{margin-top:12px;font-size:19px}main{padding-top:10px}.panel{padding:9px}}
+</style>
+</head>
+<body>
+<main>
+<header><a href="./index.html">← 蛋包饭工作台</a><a href="/">游戏盒子 ↗</a></header>
+<h1>☕ 给咖啡画一朵温柔</h1>
+<p>按住杯面慢慢画，奶泡会沿着你的笔迹铺开。</p>
+<div class="stage"><canvas id="cup" width="800" height="800" aria-label="咖啡拉花画布，用鼠标或手指绘画；也可使用下方爱心和叶子按钮制作图案"></canvas></div>
+<section class="panel" aria-label="拉花工具">
+<div class="row" aria-label="绘画材料">
+<button type="button" data-ink="#fff4d9" aria-pressed="true">🥛 奶泡</button>
+<button type="button" data-ink="#62351e" aria-pressed="false">🍫 可可</button>
+<label>粗细 <input id="size" type="range" min="4" max="55" value="24" aria-label="笔刷粗细"></label>
+</div>
+<div class="row">
+<button id="heart">♡ 爱心拉花</button><button id="leaf">❧ 叶子拉花</button><button id="undo" disabled>撤销</button><button id="clear">重新来</button><button id="finish" class="primary">✨ 完成这杯</button>
+</div>
+<p id="status" role="status" aria-live="polite">试试画一颗心，也可以自由涂鸦。</p>
+</section>
+</main>
+<script>
+'use strict';
+const canvas=document.getElementById('cup'),ctx=canvas.getContext('2d');
+const foam=document.createElement('canvas');foam.width=foam.height=800;
+const f=foam.getContext('2d'),history=[];
+const status=document.getElementById('status'),undo=document.getElementById('undo');
+let ink='#fff4d9',drawing=false,last=null,activePointer=null,finished=false;
+function circle(c,x,y,r,fill){c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.fillStyle=fill;c.fill()}
+function render(){
+ctx.clearRect(0,0,800,800);
+circle(ctx,388,415,337,'#e7cabc');circle(ctx,388,402,337,'#fffaf4');
+ctx.beginPath();ctx.arc(388,402,305,0,Math.PI*2);ctx.lineWidth=3;ctx.strokeStyle='#ebd4bd';ctx.stroke();
+ctx.beginPath();ctx.ellipse(684,395,78,92,0,0,Math.PI*2);ctx.strokeStyle='#e4c9b4';ctx.lineWidth=38;ctx.stroke();
+ctx.strokeStyle='#fffaf4';ctx.lineWidth=26;ctx.stroke();
+circle(ctx,380,390,282,'#e5cbb7');circle(ctx,380,380,282,'#fffdf8');
+const coffee=ctx.createRadialGradient(330,310,45,380,380,255);coffee.addColorStop(0,'#c88b4e');coffee.addColorStop(.82,'#ad6934');coffee.addColorStop(.96,'#d69b59');coffee.addColorStop(1,'#7e4327');
+circle(ctx,380,380,252,coffee);
+ctx.save();ctx.beginPath();ctx.arc(380,380,249,0,Math.PI*2);ctx.clip();ctx.drawImage(foam,0,0);ctx.restore();
+}
+function remember(){history.push(f.getImageData(0,0,800,800));if(history.length>20)history.shift();undo.disabled=false;finished=false;status.textContent='慢慢画，这杯咖啡由你来装饰。'}
+function point(e){const r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left)*800/r.width,y:(e.clientY-r.top)*800/r.height}}
+function inside(p){return Math.hypot(p.x-380,p.y-380)<249}
+function stroke(p,q){f.strokeStyle=ink;f.fillStyle=ink;f.lineWidth=Number(document.getElementById('size').value);f.lineCap=f.lineJoin='round';f.beginPath();f.moveTo(p.x,p.y);f.lineTo(q.x,q.y);f.stroke();circle(f,q.x,q.y,f.lineWidth/2,ink);render()}
+canvas.addEventListener('pointerdown',e=>{if(drawing)return;const p=point(e);if(!inside(p))return;remember();drawing=true;activePointer=e.pointerId;last=p;canvas.setPointerCapture(e.pointerId);stroke(p,p)});
+canvas.addEventListener('pointermove',e=>{if(!drawing||e.pointerId!==activePointer)return;const p=point(e);if(!inside(p)){last=null;return}stroke(last||p,p);last=p});
+function stop(e){if(e.pointerId!==activePointer)return;drawing=false;last=null;activePointer=null}
+canvas.addEventListener('pointerup',stop);canvas.addEventListener('pointercancel',stop);canvas.addEventListener('lostpointercapture',stop);
+document.querySelectorAll('[data-ink]').forEach(button=>button.addEventListener('click',()=>{ink=button.dataset.ink;document.querySelectorAll('[data-ink]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)))}));
+undo.onclick=()=>{if(!history.length)return;f.putImageData(history.pop(),0,0);undo.disabled=!history.length;finished=false;status.textContent='已撤销上一笔。';render()};
+document.getElementById('clear').onclick=()=>{remember();f.clearRect(0,0,800,800);render();status.textContent='新的杯面准备好啦。'};
+function pattern(kind){
+remember();f.save();f.translate(380,380);f.fillStyle='#fff4d9';f.strokeStyle='#fff4d9';
+if(kind==='heart'){f.beginPath();f.moveTo(0,110);f.bezierCurveTo(-190,-5,-130,-160,0,-65);f.bezierCurveTo(130,-160,190,-5,0,110);f.fill()}
+else{for(let i=0;i<7;i++){const y=105-i*32,w=85-i*9;f.beginPath();f.ellipse(-w/2,y,w/1.5,17,.4,0,Math.PI*2);f.ellipse(w/2,y,w/1.5,17,-.4,0,Math.PI*2);f.fill()}f.lineWidth=9;f.lineCap='round';f.beginPath();f.moveTo(0,145);f.quadraticCurveTo(8,0,0,-140);f.stroke()}
+f.restore();render();status.textContent='奶泡图案做好了，还可以加上自己的笔迹。';
+}
+document.getElementById('heart').onclick=()=>pattern('heart');
+document.getElementById('leaf').onclick=()=>pattern('leaf');
+document.getElementById('finish').onclick=()=>{finished=true;status.textContent='☕ 你的专属拉花完成啦，温热的心意已上桌！';canvas.animate([{transform:'scale(1)'},{transform:'scale(1.025)'},{transform:'scale(1)'}],{duration:650});};
+render();
+</script>
+</body>
+</html>

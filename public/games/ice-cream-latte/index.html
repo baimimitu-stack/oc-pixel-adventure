@@ -1,0 +1,1842 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>女仆咖啡厅 - 冰淇淋球与拉花工坊</title>
+    <style>
+        /* 严禁使用 vh，全部采用 px 与 % 布局 */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            overflow: hidden;
+            background: #faf0f2;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            position: fixed;
+            user-select: none;
+        }
+
+        #webgl-box {
+            width: 100%; height: 100%;
+            touch-action: none;
+            position: absolute; top: 0; left: 0;
+            z-index: 1;
+        }
+
+        /* 顶部导航与快捷栏 */
+        .top-nav {
+            position: absolute;
+            top: 15px; left: 12px; right: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 20;
+            pointer-events: none;
+        }
+        .mode-pill {
+            background: rgba(255, 255, 255, 0.95);
+            border: 2px solid #ff758f;
+            border-radius: 20px;
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #d90429;
+            box-shadow: 0 4px 12px rgba(255, 117, 143, 0.2);
+            pointer-events: auto;
+        }
+        .top-btn-group {
+            display: flex;
+            gap: 8px;
+            pointer-events: auto;
+        }
+        .icon-btn {
+            width: 42px; height: 42px;
+            border-radius: 21px;
+            background: #fff;
+            border: 2px solid #ffb3c1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            cursor: pointer;
+        }
+
+        /* 视角预设菜单 */
+        .cam-preset-pop {
+            position: absolute;
+            top: 65px; right: 65px;
+            background: rgba(255, 255, 255, 0.96);
+            border: 2px solid #ffb3c1;
+            border-radius: 14px;
+            padding: 8px;
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+            z-index: 25;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+        }
+        .cam-btn {
+            background: #fff0f3;
+            border: 1px solid #ffd1dc;
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #c9184a;
+            cursor: pointer;
+            text-align: left;
+        }
+
+        /* 桌布换色面板 */
+        .color-palette-pop {
+            position: absolute;
+            top: 65px; right: 12px;
+            background: rgba(255, 255, 255, 0.96);
+            border: 2px solid #ffb3c1;
+            border-radius: 14px;
+            padding: 10px;
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+            z-index: 25;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+        }
+        .color-opt {
+            border: none;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: left;
+        }
+
+        /* 女仆轻量气泡 */
+        .maid-bubble {
+            position: absolute;
+            top: 65px; left: 12px;
+            background: rgba(255,255,255,0.96);
+            border: 2px solid #ffb3c1;
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-size: 13px;
+            color: #444;
+            max-width: 260px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            z-index: 20;
+            display: none;
+            line-height: 1.4;
+        }
+
+        /* 冰淇淋口味色条 */
+        .color-swatch-bar {
+            position: absolute;
+            top: 70px; left: 12px;
+            background: rgba(255, 255, 255, 0.92);
+            border: 2px solid #ffb3c1;
+            border-radius: 20px;
+            padding: 4px 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 20;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.06);
+        }
+        .color-dot {
+            width: 24px; height: 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: transform 0.15s;
+        }
+        .color-dot.active {
+            transform: scale(1.25);
+            border-color: #ff4d6d;
+        }
+
+        /* 底部工具操作栏 */
+        .latte-bar {
+            position: absolute;
+            bottom: 12px; left: 10px; right: 10px;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* 功能模式切换 */
+        .tool-switch {
+            display: flex;
+            flex-wrap: wrap;
+            background: rgba(255, 255, 255, 0.96);
+            border: 2px solid #ffb3c1;
+            border-radius: 25px;
+            padding: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            gap: 4px;
+        }
+        .tool-btn {
+            flex: 1 1 18%; height: 34px;
+            border-radius: 20px;
+            border: none;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            background: transparent;
+            color: #555;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+        }
+        .tool-btn.active {
+            background: #ff4d6d;
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(255, 77, 109, 0.4);
+        }
+
+        /* 子面板：彩笔颜色 / 装饰选择 */
+        .sub-bar {
+            display: none;
+            position: absolute;
+            left: 10px; right: 10px;
+            bottom: 170px;
+            z-index: 20;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.96);
+            border: 2px solid #ffb3c1;
+            border-radius: 20px;
+            padding: 4px 10px;
+            overflow-x: auto;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        .sub-label {
+            font-size: 11px;
+            font-weight: bold;
+            color: #ff6584;
+            white-space: nowrap;
+        }
+        .pen-dot {
+            flex: none;
+            width: 24px; height: 24px;
+            border-radius: 12px;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: transform 0.15s;
+        }
+        .pen-dot.active {
+            transform: scale(1.25);
+            border-color: #ff4d6d;
+        }
+        .deco-btn {
+            flex: none;
+            border: 1.5px solid #ffd1dc;
+            background: #fff0f3;
+            color: #c9184a;
+            border-radius: 14px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .deco-btn.active {
+            background: #ff4d6d;
+            color: #fff;
+            border-color: #ff4d6d;
+        }
+
+        /* 幅度滑条：控制笔刷大小和变化速度 */
+        .size-bar {
+            position: absolute;
+            top: 112px; left: 12px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.92);
+            border: 2px solid #ffb3c1;
+            border-radius: 20px;
+            padding: 4px 10px;
+            z-index: 20;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.06);
+        }
+        .size-bar input {
+            width: 120px;
+            accent-color: #ff4d6d;
+        }
+
+        /* 右侧缩放按钮 */
+        .zoom-ctrl {
+            position: absolute;
+            right: 12px; top: 40%;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 20;
+        }
+
+        /* 底部操作组 */
+        .action-row {
+            display: flex;
+            gap: 8px;
+        }
+        .act-btn {
+            flex: 1; height: 42px;
+            border-radius: 21px;
+            border: none;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn-undo { background: #fff0f3; color: #c9184a; border: 1.5px solid #ffb3c1; }
+        .btn-reset { background: #ffffff; color: #555; border: 1.5px solid #ccc; }
+        .btn-spell { background: linear-gradient(135deg, #ff4d6d, #c9184a); color: #fff; }
+
+        /* 爱心特效 */
+        .sparkle-heart {
+            position: absolute;
+            font-size: 24px;
+            pointer-events: none;
+            animation: floatUpAnim 1.2s ease-out forwards;
+            z-index: 99;
+        }
+        @keyframes floatUpAnim {
+            0% { transform: translateY(0) scale(0.5); opacity: 1; }
+            100% { transform: translateY(-90px) scale(1.4); opacity: 0; }
+        }
+        /* 手机竖屏：工具按钮一行横向滑动，文字缩小，子面板跟着下移 */
+        @media (max-width: 520px) {
+            .mode-pill {
+                font-size: 11px;
+                padding: 6px 10px;
+                max-width: calc(100% - 190px);
+                line-height: 1.35;
+            }
+            .icon-btn { width: 38px; height: 38px; font-size: 16px; }
+            .tool-switch {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                scrollbar-width: none;
+                -webkit-overflow-scrolling: touch;
+            }
+            .tool-switch::-webkit-scrollbar { display: none; }
+            .tool-btn { flex: none; padding: 0 12px; white-space: nowrap; }
+            .sub-bar { bottom: 122px; }
+            .act-btn { font-size: 12px; }
+        }
+    </style>
+    <script src="./three.min.js"></script>
+</head>
+<body>
+
+    <div class="top-nav">
+        <div class="mode-pill" id="modePill">🍨 点一下杯子，放上一颗冰淇淋球</div>
+        <div class="top-btn-group">
+            <a class="icon-btn" href="/" title="回游戏盒子" style="text-decoration:none;">🏠</a>
+            <button class="icon-btn" onclick="toggleCamPresets()" title="切换相机机位">🎥</button>
+            <button class="icon-btn" onclick="togglePalette()" title="换桌布颜色">🎨</button>
+            <button class="icon-btn" style="background:#ff4d6d;color:#fff;" onclick="toggleBubble()" title="女仆提示">🐱</button>
+        </div>
+    </div>
+
+    <!-- 视角预设菜单 -->
+    <div class="cam-preset-pop" id="camPresetPop">
+        <button class="cam-btn" onclick="setCamPreset('BARISTA')">📐 45° 咖啡师视角</button>
+        <button class="cam-btn" onclick="setCamPreset('SIDE')">☕ 侧面平视冰淇淋球</button>
+        <button class="cam-btn" onclick="setCamPreset('TOP')">👀 正上俯视全览</button>
+    </div>
+
+    <!-- 桌布颜色快捷切换面板 -->
+    <div class="color-palette-pop" id="colorPalette">
+        <button class="color-opt" style="background:#ffe5ec;color:#c9184a;" onclick="changeTableColor('pink')">🌸 樱花粉格纹桌布</button>
+        <button class="color-opt" style="background:#e8f5e9;color:#2e7d32;" onclick="changeTableColor('mint')">🌿 薄荷绿格纹桌布</button>
+        <button class="color-opt" style="background:#f3e8ff;color:#7e22ce;" onclick="changeTableColor('purple')">💜 薰衣草紫格桌布</button>
+        <button class="color-opt" style="background:#fff7ed;color:#c2410c;" onclick="changeTableColor('orange')">🍋 蜜糖柠檬黄桌布</button>
+        <button class="color-opt" style="background:#f5ebe0;color:#78350f;" onclick="changeTableColor('wood')">☕ 复古焦糖木纹桌面</button>
+    </div>
+
+    <div class="maid-bubble" id="maidBubble">主人！先点一下杯子，放上第一颗冰淇淋球吧~ 每颗都可以选不同的口味哦 🍨✨</div>
+
+    <!-- 顶部左侧：口味色条（决定之后放的冰淇淋球、拉花、彩笔的颜色） -->
+    <div class="color-swatch-bar">
+        <span style="font-size:11px;font-weight:bold;color:#ff6584;">口味:</span>
+        <div class="color-dot" style="background:#fffcf0;" onclick="setGelatoColor('#fffcf0', this)" title="香草白"></div>
+        <div class="color-dot" style="background:#ff9ebb;" onclick="setGelatoColor('#ff9ebb', this)" title="草莓甜心"></div>
+        <div class="color-dot" style="background:#88c278;" onclick="setGelatoColor('#88c278', this)" title="宇治抹茶"></div>
+        <div class="color-dot" style="background:#64b5f6;" onclick="setGelatoColor('#64b5f6', this)" title="蓝蝶海盐"></div>
+        <div class="color-dot" style="background:#ce93d8;" onclick="setGelatoColor('#ce93d8', this)" title="香芋浓郁"></div>
+        <div class="color-dot" style="background:#ffd54f;" onclick="setGelatoColor('#ffd54f', this)" title="芒果乳酪"></div>
+    </div>
+
+    <!-- 幅度：1 最细最慢，10 最粗最快 -->
+    <div class="size-bar" id="sizeBar">
+        <span class="sub-label">幅度</span>
+        <input type="range" id="sizeRange" min="1" max="10" step="1" value="3" oninput="setBrushLevel(this.value)">
+        <span class="sub-label" id="sizeVal">3</span>
+    </div>
+
+    <!-- 缩放：也可以用滚轮或双指捏合 -->
+    <div class="zoom-ctrl">
+        <button class="icon-btn" onclick="zoomBy(0.85)" title="拉近">➕</button>
+        <button class="icon-btn" onclick="zoomBy(1.18)" title="拉远">➖</button>
+    </div>
+
+    <div id="webgl-box"></div>
+
+    <div class="latte-bar">
+        <!-- 捏的方式（仅捏起来模式显示） -->
+        <div class="sub-bar" id="pinchBar">
+            <span class="sub-label">捏</span>
+            <button class="deco-btn active" onclick="setPinchMode('peak', this)">🫳 捏出尖角</button>
+            <button class="deco-btn" onclick="setPinchMode('move', this)">✋ 挪动冰淇淋球</button>
+        </div>
+
+        <!-- 颜色（描边彩笔 / 画杯子模式显示） -->
+        <div class="sub-bar" id="penBar">
+            <span class="sub-label">颜色</span>
+            <button class="pen-dot active" style="background:#e8334a;" onclick="setPenColor('#e8334a', this)" title="草莓红"></button>
+            <button class="pen-dot" style="background:#ffc400;" onclick="setPenColor('#ffc400', this)" title="柠檬黄"></button>
+            <button class="pen-dot" style="background:#3fa34d;" onclick="setPenColor('#3fa34d', this)" title="抹茶绿"></button>
+            <button class="pen-dot" style="background:#2f8fe0;" onclick="setPenColor('#2f8fe0', this)" title="蓝莓蓝"></button>
+            <button class="pen-dot" style="background:#9b59d0;" onclick="setPenColor('#9b59d0', this)" title="紫薯紫"></button>
+            <button class="pen-dot" style="background:#ff7eb6;" onclick="setPenColor('#ff7eb6', this)" title="樱花粉"></button>
+            <button class="pen-dot" style="background:#ffffff;" onclick="setPenColor('#ffffff', this)" title="奶白"></button>
+            <button class="pen-dot" style="background:#3b1d0e;" onclick="setPenColor('#3b1d0e', this)" title="巧克力"></button>
+        </div>
+
+        <!-- 小装饰选择（仅小装饰模式显示） -->
+        <div class="sub-bar" id="decoBar">
+            <button class="deco-btn active" onclick="setDecoType('lemon', this)">🍋 柠檬片</button>
+            <button class="deco-btn" onclick="setDecoType('strawberry', this)">🍓 草莓</button>
+            <button class="deco-btn" onclick="setDecoType('cherry', this)">🍒 樱桃</button>
+            <button class="deco-btn" onclick="setDecoType('mint', this)">🌿 薄荷叶</button>
+            <button class="deco-btn" onclick="setDecoType('cookie', this)">🍪 饼干</button>
+            <button class="deco-btn" onclick="setDecoType('chips', this)">🍫 巧克力碎</button>
+        </div>
+
+        <!-- 功能模式切换 -->
+        <div class="tool-switch">
+            <button class="tool-btn active" id="btnToolAdd" onclick="setMainMode('ADD')"><span>🍨 放冰淇淋</span></button>
+            <button class="tool-btn" id="btnToolPinch" onclick="setMainMode('PINCH')"><span>🤏 捏起来</span></button>
+            <button class="tool-btn" id="btnToolFlatten" onclick="setMainMode('FLATTEN')"><span>🥄 勺背压平</span></button>
+            <button class="tool-btn" id="btnToolSpoon" onclick="setMainMode('SPOON')"><span>🌪️ 旋涡乳化</span></button>
+            <button class="tool-btn" id="btnToolPitcher" onclick="setMainMode('PITCHER')"><span>🥛 金边拉花</span></button>
+            <button class="tool-btn" id="btnToolEtch" onclick="setMainMode('ETCH')"><span>🍫 描边彩笔</span></button>
+            <button class="tool-btn" id="btnToolDeco" onclick="setMainMode('DECO')"><span>🍋 小装饰</span></button>
+            <button class="tool-btn" id="btnToolCup" onclick="setMainMode('CUP')"><span>🎨 画画</span></button>
+            <button class="tool-btn" id="btnToolOrbit" onclick="setMainMode('ORBIT')"><span>🖐️ 转视角</span></button>
+        </div>
+
+        <div class="action-row">
+            <button class="act-btn btn-undo" onclick="undo()">↩️ 撤回</button>
+            <button class="act-btn btn-reset" onclick="resetCup()">🧹 清空重来</button>
+            <button class="act-btn btn-spell" onclick="castSpell()">✨ 美味魔法</button>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer;
+        let tableMesh, cupGroup, cupBodyMesh, saucerMesh, liquidMesh, liquidTexture, liquidCanvas, liquidCtx;
+        let pitcherGroup, pitcherMesh, milkStreamMesh;
+        let stirSpoonGroup, penGroup;
+        let hemiLight, sunLight;
+
+        const LIQUID_Y = 1.48;   // 咖啡液面高度
+        const SCOOP_R = 0.9;     // 冰淇淋球半径
+        const MAX_SCOOPS = 14;   // 杯子最多放几颗
+        const scoops = [];       // 所有冰淇淋球的网格
+
+        // 交互状态
+        let currentMode = 'ADD'; // 'ADD' | 'FLATTEN' | 'SPOON' | 'PITCHER' | 'ETCH' | 'ORBIT'
+        let currentGelatoColor = '#fffcf0';
+        let isInteracting = false;
+        let currentHitPoint = null;
+        let lastHitPoint = null;
+        let currentHitObject = null;
+        let lastCanvasPos = null;
+        let actionStartTime = 0;
+        let penPts = [];
+        let penColor = '#e8334a';   // 彩笔颜色（和口味分开，颜色更跳）
+        let currentDeco = 'lemon';  // 当前选中的小装饰
+        let grabbedScoop = null;    // 正在被捏起来的冰淇淋球
+        const decos = [];           // 放上去的小装饰
+        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(LIQUID_Y + 0.6));
+        const groundHit = new THREE.Vector3();
+        let currentHitUV = null;    // 命中点在网格上的 uv，用来把字画到杯子上
+        let pinchMode = 'peak';     // 捏起来：'peak' 捏出尖角 | 'move' 挪动
+        let cupCanvas = null, cupCtx = null, cupTexture = null;
+        let cupProfileLen = 1;      // 杯身轮廓总长度，用来换算笔刷大小
+        const undoStack = [];       // 撤回栈：每一步之前的快照
+        const UNDO_MAX = 30;
+        let brushLevel = 3;         // 幅度 1~10
+        let lastPaintObj = null;    // 画画时上一笔落在哪个物体上
+
+        // 把幅度换算成 0.1~1 的系数，各工具按它决定大小和速度
+        function brushScale() {
+            return brushLevel / 10;
+        }
+        let pendingUndo = null;     // 这次按下时的快照，松手时才决定要不要入栈
+        let actionDirty = false;    // 这次操作是否真的改动了东西
+
+        // 360° 自由相机
+        let camRadius = 8.5;
+        const camTarget = new THREE.Vector3(0, 0, 0);   // 视线中心（可平移）
+        let orbitDrag = false;      // 右键拖动：随时转视角
+        let panDrag = false;        // Shift / 中键拖动：平移
+        let lastCentroid = null;    // 双指中心点，用来双指拖动转视角
+        const CAM_MIN = 3.5;        // 最近距离
+        const CAM_MAX = 14;         // 最远距离
+        let pinchStartDist = 0;     // 双指捏合开始时两指的距离
+        let pinchStartRadius = 8.5;
+        let camTheta = 0.0;
+        let camPhi = 0.82;
+        let lastPointerPos = { x: 0, y: 0 };
+
+        function init() {
+            const box = document.getElementById('webgl-box');
+            const w = box.clientWidth;
+            const h = box.clientHeight;
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xfaf0f2);
+
+            camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 100);
+            updateCameraPosition();
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(w, h);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            // 画质：sRGB 输出 + 电影感色调映射，颜色更干净、高光更柔和
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.0;
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            box.appendChild(renderer.domElement);
+
+            // 光影系统：环境光 + 主光（带柔和阴影）+ 逆光轮廓光
+            hemiLight = new THREE.HemisphereLight(0xfff6fa, 0xf1c4cf, 0.7);
+            scene.add(hemiLight);
+
+            sunLight = new THREE.DirectionalLight(0xfff3e6, 1.0);
+            sunLight.position.set(6, 14, 8);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.set(2048, 2048);
+            sunLight.shadow.camera.left = -5;
+            sunLight.shadow.camera.right = 5;
+            sunLight.shadow.camera.top = 5;
+            sunLight.shadow.camera.bottom = -5;
+            sunLight.shadow.camera.near = 1;
+            sunLight.shadow.camera.far = 40;
+            sunLight.shadow.bias = -0.0004;
+            scene.add(sunLight);
+
+            const rim = new THREE.DirectionalLight(0xffd1dc, 0.5);
+            rim.position.set(-6, 8, -5);
+            scene.add(rim);
+
+            // 1. 桌布
+            buildCustomizableTable('pink');
+
+            // 2. 白瓷杯与浓缩咖啡液面
+            buildSolidUnified3DCup();
+
+            // 3. 道具模型
+            buildMilkPitcher();
+            buildStirSpoon();
+            buildEtchingPen();
+
+            setupPointerEvents();
+            window.addEventListener('resize', onResize);
+            animate();
+        }
+
+        // ================= 1. 360° 相机系统 =================
+        function updateCameraPosition() {
+            const fit = Math.pow(Math.max(1, 1.2 / camera.aspect), 0.8);
+            const r = camRadius * fit;
+            camera.position.x = camTarget.x + r * Math.sin(camPhi) * Math.sin(camTheta);
+            camera.position.y = r * Math.cos(camPhi);
+            camera.position.z = camTarget.z + r * Math.sin(camPhi) * Math.cos(camTheta);
+            // 默认距离及更远时看杯子中部；越拉近越往上看，落到冰淇淋上
+            const t = THREE.MathUtils.clamp((8.5 - camRadius) / (8.5 - CAM_MIN), 0, 1);
+            camera.lookAt(camTarget.x, 0.8 + t * 1.0, camTarget.z);
+        }
+
+        // 转视角：左右不限，上下从几乎正上方到几乎平视
+        function orbitBy(dx, dy) {
+            camTheta -= dx * 0.008;
+            camPhi = THREE.MathUtils.clamp(camPhi - dy * 0.008, 0.12, 1.5);
+            updateCameraPosition();
+        }
+
+        // 平移：沿屏幕左右、前后移动视线中心，最远不离开杯子太多
+        function panBy(dx, dy) {
+            const k = camRadius * 0.0015;
+            const rx = Math.cos(camTheta), rz = -Math.sin(camTheta);
+            const fx = -Math.sin(camTheta), fz = -Math.cos(camTheta);
+            camTarget.x += -dx * k * rx + dy * k * fx;
+            camTarget.z += -dx * k * rz + dy * k * fz;
+            const len = Math.hypot(camTarget.x, camTarget.z);
+            if (len > 2.5) {
+                camTarget.x *= 2.5 / len;
+                camTarget.z *= 2.5 / len;
+            }
+            updateCameraPosition();
+        }
+
+        function setCamPreset(preset) {
+            document.getElementById('camPresetPop').style.display = 'none';
+            camTarget.set(0, 0, 0);
+            if (preset === 'BARISTA') {
+                camTheta = 0.0;
+                camPhi = 0.82;
+            } else if (preset === 'SIDE') {
+                camTheta = 0.45;
+                camPhi = 1.35;
+            } else {
+                camTheta = 0.0;
+                camPhi = 0.2;
+            }
+            updateCameraPosition();
+        }
+
+        function zoomBy(factor) {
+            camRadius = THREE.MathUtils.clamp(camRadius * factor, CAM_MIN, CAM_MAX);
+            updateCameraPosition();
+        }
+
+        function toggleCamPresets() {
+            const p = document.getElementById('camPresetPop');
+            p.style.display = p.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        // ================= 2. 桌布 =================
+        function generateTableTexture(theme) {
+            const c = document.createElement('canvas');
+            c.width = 512; c.height = 512;
+            const ctx = c.getContext('2d');
+
+            if (theme === 'wood') {
+                ctx.fillStyle = '#b08968';
+                ctx.fillRect(0, 0, 512, 512);
+                ctx.strokeStyle = '#7f5539';
+                ctx.lineWidth = 6;
+                for (let i = 0; i < 35; i++) {
+                    ctx.beginPath();
+                    let y = i * 16;
+                    ctx.moveTo(0, y);
+                    ctx.bezierCurveTo(150, y + 8, 350, y - 8, 512, y);
+                    ctx.stroke();
+                }
+            } else {
+                let sqColor = '#ff9ebb';
+                let crossColor = '#ff6584';
+
+                if (theme === 'mint') {
+                    sqColor = '#a5d6a7';
+                    crossColor = '#66bb6a';
+                } else if (theme === 'purple') {
+                    sqColor = '#ce93d8';
+                    crossColor = '#ab47bc';
+                } else if (theme === 'orange') {
+                    sqColor = '#ffe082';
+                    crossColor = '#ffa726';
+                }
+
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, 512, 512);
+
+                const sq = 64;
+                ctx.fillStyle = sqColor;
+                for (let y = 0; y < 512; y += sq) {
+                    for (let x = 0; x < 512; x += sq) {
+                        if ((x / sq + y / sq) % 2 === 0) ctx.fillRect(x, y, sq, sq);
+                    }
+                }
+                ctx.fillStyle = crossColor;
+                ctx.globalAlpha = 0.45;
+                for (let y = 0; y < 512; y += sq * 2) ctx.fillRect(0, y, 512, sq);
+                for (let x = 0; x < 512; x += sq * 2) ctx.fillRect(x, 0, sq, 512);
+                ctx.globalAlpha = 1.0;
+            }
+
+            const tex = new THREE.CanvasTexture(c);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(7, 7);
+            tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+            tex.encoding = THREE.sRGBEncoding;
+            return tex;
+        }
+
+        function buildCustomizableTable(theme) {
+            const tableGeo = new THREE.CylinderGeometry(15, 15, 1, 48);
+            const tableMat = new THREE.MeshStandardMaterial({ map: generateTableTexture(theme), roughness: 0.55 });
+
+            if (tableMesh) scene.remove(tableMesh);
+            tableMesh = new THREE.Mesh(tableGeo, tableMat);
+            tableMesh.position.y = -0.52;
+            tableMesh.receiveShadow = true;
+            scene.add(tableMesh);
+        }
+
+        function changeTableColor(theme) {
+            tableMesh.material.map = generateTableTexture(theme);
+            tableMesh.material.needsUpdate = true;
+            document.getElementById('colorPalette').style.display = 'none';
+        }
+
+        function togglePalette() {
+            const p = document.getElementById('colorPalette');
+            p.style.display = p.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        // ================= 3. 白瓷杯与咖啡液面 =================
+        function buildSolidUnified3DCup() {
+            cupGroup = new THREE.Group();
+
+            // 上釉瓷器：带清漆层，有柔和的高光
+            const porcelainMat = new THREE.MeshPhysicalMaterial({
+                color: 0xffffff,
+                roughness: 0.15,
+                metalness: 0,
+                clearcoat: 0.6,
+                clearcoatRoughness: 0.12
+            });
+
+            // 底托
+            const saucerPts = [];
+            saucerPts.push(new THREE.Vector2(0, 0));
+            saucerPts.push(new THREE.Vector2(1.8, 0.04));
+            saucerPts.push(new THREE.Vector2(3.3, 0.32));
+            saucerPts.push(new THREE.Vector2(3.5, 0.28));
+            saucerPts.push(new THREE.Vector2(1.8, -0.08));
+            saucerPts.push(new THREE.Vector2(1.6, 0));
+            saucerMesh = new THREE.Mesh(new THREE.LatheGeometry(saucerPts, 64), porcelainMat);
+            saucerMesh.receiveShadow = true;
+            saucerMesh.castShadow = true;
+            cupGroup.add(saucerMesh);
+
+            // 宽口深腹杯
+            const cupPts = [];
+            cupPts.push(new THREE.Vector2(0.9, 0.1));
+            cupPts.push(new THREE.Vector2(1.65, 0.8));
+            cupPts.push(new THREE.Vector2(2.1, 1.75));
+            cupPts.push(new THREE.Vector2(2.22, 1.8));
+            cupPts.push(new THREE.Vector2(2.18, 1.68));
+            cupPts.push(new THREE.Vector2(1.85, 0.6));
+            cupPts.push(new THREE.Vector2(1.1, 0.05));
+            cupPts.push(new THREE.Vector2(0.9, 0.05));
+            // 杯身单独一张画布，用来在杯子外壁上画画
+            cupCanvas = document.createElement('canvas');
+            cupCanvas.width = 2048;
+            cupCanvas.height = 768;
+            cupCtx = cupCanvas.getContext('2d');
+            cupCtx.fillStyle = '#ffffff';
+            cupCtx.fillRect(0, 0, cupCanvas.width, cupCanvas.height);
+            cupTexture = new THREE.CanvasTexture(cupCanvas);
+            cupTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+            cupTexture.encoding = THREE.sRGBEncoding;
+
+            // 杯身 uv 改成按轮廓长度均匀分布：原来每段轮廓平分高度，杯壁被压扁、杯沿被拉长
+            const cupGeo = new THREE.LatheGeometry(cupPts, 96);
+            const lens = [0];
+            for (let j = 1; j < cupPts.length; j++) lens.push(lens[j - 1] + cupPts[j].distanceTo(cupPts[j - 1]));
+            cupProfileLen = lens[lens.length - 1];
+            const uvAttr = cupGeo.attributes.uv;
+            for (let k = 0; k < uvAttr.count; k++) uvAttr.setY(k, lens[k % cupPts.length] / cupProfileLen);
+            uvAttr.needsUpdate = true;
+
+            cupBodyMesh = new THREE.Mesh(cupGeo, new THREE.MeshPhysicalMaterial({
+                map: cupTexture,
+                color: 0xffffff,
+                roughness: 0.15,
+                metalness: 0,
+                clearcoat: 0.6,
+                clearcoatRoughness: 0.12
+            }));
+            cupBodyMesh.receiveShadow = true;
+            cupBodyMesh.castShadow = true;
+            cupGroup.add(cupBodyMesh);
+
+            // 把手
+            const handleGeo = new THREE.TorusGeometry(0.62, 0.12, 24, 40, Math.PI * 1.15);
+            const handle = new THREE.Mesh(handleGeo, porcelainMat);
+            handle.rotation.z = -Math.PI / 2;
+            handle.position.set(2.35, 0.95, 0);
+            handle.castShadow = true;
+            cupGroup.add(handle);
+
+            // 浓缩咖啡液面（拉花与彩笔都画在这张贴图上）
+            liquidCanvas = document.createElement('canvas');
+            liquidCanvas.width = 1024;
+            liquidCanvas.height = 1024;
+            liquidCtx = liquidCanvas.getContext('2d');
+            drawFreshCremaBase();
+
+            liquidTexture = new THREE.CanvasTexture(liquidCanvas);
+            liquidTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+            liquidTexture.encoding = THREE.sRGBEncoding;
+
+            const liquidGeo = new THREE.CircleGeometry(1.95, 96);
+            liquidGeo.rotateX(-Math.PI / 2);
+
+            // 咖啡液面：有光泽的清漆质感
+            const liquidMat = new THREE.MeshPhysicalMaterial({
+                map: liquidTexture,
+                roughness: 0.3,
+                metalness: 0,
+                clearcoat: 0.8,
+                clearcoatRoughness: 0.12
+            });
+
+            liquidMesh = new THREE.Mesh(liquidGeo, liquidMat);
+            liquidMesh.position.y = LIQUID_Y;
+            liquidMesh.receiveShadow = true;
+            cupGroup.add(liquidMesh);
+
+            scene.add(cupGroup);
+        }
+
+        function drawFreshCremaBase() {
+            const rad = 512;
+            const grad = liquidCtx.createRadialGradient(rad, rad, 40, rad, rad, rad);
+            grad.addColorStop(0.0, '#a55928');
+            grad.addColorStop(0.45, '#783510');
+            grad.addColorStop(0.85, '#4a1d06');
+            grad.addColorStop(1.0, '#270e02');
+
+            liquidCtx.fillStyle = grad;
+            liquidCtx.fillRect(0, 0, 1024, 1024);
+
+            // 很淡的油脂光斑，代替之前颗粒感强的贴图
+            liquidCtx.fillStyle = 'rgba(255, 205, 145, 0.04)';
+            for (let i = 0; i < 60; i++) {
+                liquidCtx.beginPath();
+                liquidCtx.arc(Math.random() * 1024, Math.random() * 1024, 20 + Math.random() * 40, 0, Math.PI * 2);
+                liquidCtx.fill();
+            }
+        }
+
+        // ================= 4. 冰淇淋球：每颗一个颜色，可多颗叠放，可压平 =================
+        function placeScoop(hit) {
+            if (scoops.length >= MAX_SCOOPS) {
+                setBubble('杯子已经装满啦，先清空再来吧~');
+                return;
+            }
+            const p = hit.point;
+            // 只允许放在杯子里
+            if (Math.hypot(p.x, p.z) > 1.85) return;
+
+            const onScoop = scoops.includes(hit.object);
+            const y = onScoop ? p.y + SCOOP_R * 0.5 : LIQUID_Y + SCOOP_R * 0.82;
+
+            // 每颗球一张画布：底色就是口味色，之后可以在上面画画
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = currentGelatoColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.encoding = THREE.sRGBEncoding;
+            tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+            const mat = new THREE.MeshPhysicalMaterial({
+                map: tex,
+                color: 0xffffff,
+                roughness: 0.42,
+                metalness: 0,
+                clearcoat: 0.25,
+                clearcoatRoughness: 0.35
+            });
+            // 球的两极转到左右两侧，正面和顶部画画时不容易变形
+            const geo = new THREE.SphereGeometry(SCOOP_R, 64, 48);
+            geo.rotateZ(Math.PI / 2);
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.userData.canvas = canvas;
+            mesh.userData.ctx = ctx;
+            mesh.userData.tex = tex;
+            mesh.scale.set(1.08, 0.9, 1.08);
+            mesh.position.set(p.x, y, p.z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+            scoops.push(mesh);
+            actionDirty = true;
+        }
+
+        // 勺背压平：只作用在按到的冰淇淋球上，用平滑衰减，不产生尖刺
+        function pressScoops(curPoint) {
+            const s = brushScale();
+            const PR = 0.25 + 0.3 * s;     // 压平范围（球的局部单位）
+            const RATE = 0.02 + 0.12 * s;  // 每帧压下比例
+            const PUSH = 0.03;  // 向外挤的距离
+
+            for (const m of scoops) {
+                if (Math.hypot(m.position.x - curPoint.x, m.position.z - curPoint.z) > SCOOP_R * 1.1 + PR) continue;
+
+                const pl = m.worldToLocal(curPoint.clone());
+                const pos = m.geometry.attributes.position;
+                let changed = false;
+
+                for (let v = 0; v < pos.count; v++) {
+                    const x = pos.getX(v), y = pos.getY(v), z = pos.getZ(v);
+                    const dx = x - pl.x, dz = z - pl.z;
+                    const d = Math.hypot(dx, dz);
+                    if (d >= PR) continue;
+
+                    const f = 1 - (d / PR) * (d / PR);
+                    const w = f * f;
+                    if (y > pl.y) {
+                        pos.setY(v, y - (y - pl.y) * RATE * w);
+                        changed = true;
+                    }
+                    if (d > 1e-4) {
+                        pos.setX(v, x + (dx / d) * PUSH * w);
+                        pos.setZ(v, z + (dz / d) * PUSH * w);
+                        changed = true;
+                    }
+                }
+
+                if (changed) {
+                    pos.needsUpdate = true;
+                    m.geometry.computeVertexNormals();
+                    m.geometry.computeBoundingSphere();
+                }
+            }
+        }
+
+        function setGelatoColor(colorHex, elem) {
+            currentGelatoColor = colorHex;
+            document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+            if (elem) elem.classList.add('active');
+        }
+
+        // ================= 5. 道具模型：拉花缸、勺子、画笔 =================
+        function buildMilkPitcher() {
+            pitcherGroup = new THREE.Group();
+            pitcherMesh = new THREE.Group();
+
+            const steelMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, metalness: 0.92, roughness: 0.15 });
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.75, 1.8, 32), steelMat);
+            body.castShadow = true;
+            pitcherMesh.add(body);
+
+            const spoutGeo = new THREE.ConeGeometry(0.25, 0.45, 24);
+            spoutGeo.translate(0, 0.2, -0.65);
+            spoutGeo.rotateX(-Math.PI / 4);
+            const spout = new THREE.Mesh(spoutGeo, steelMat);
+            spout.position.y = 0.7;
+            pitcherMesh.add(spout);
+
+            const pHandle = new THREE.Mesh(new THREE.TorusGeometry(0.45, 0.07, 12, 24, Math.PI), steelMat);
+            pHandle.rotation.y = Math.PI / 2;
+            pHandle.position.set(0, 0, 0.8);
+            pitcherMesh.add(pHandle);
+
+            pitcherMesh.position.set(0, 1.6, 0.8);
+            pitcherMesh.rotation.x = 0.35;
+            pitcherMesh.rotation.z = -0.25;
+            pitcherGroup.add(pitcherMesh);
+
+            // 奶流：细一点，颜色跟随当前口味
+            const streamGeo = new THREE.CylinderGeometry(0.035, 0.055, 1.4, 16);
+            streamGeo.translate(0, -0.7, 0);
+            const streamMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.25 });
+            milkStreamMesh = new THREE.Mesh(streamGeo, streamMat);
+            milkStreamMesh.visible = false;
+            pitcherGroup.add(milkStreamMesh);
+
+            pitcherGroup.position.set(0, 2.8, 0);
+            pitcherGroup.visible = false;
+            scene.add(pitcherGroup);
+        }
+
+        function buildStirSpoon() {
+            stirSpoonGroup = new THREE.Group();
+            const steelMat = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, metalness: 0.95, roughness: 0.15 });
+
+            const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.07, 3.2, 16), steelMat);
+            handle.position.y = 1.4;
+            handle.castShadow = true;
+            stirSpoonGroup.add(handle);
+
+            const scoop = new THREE.Mesh(new THREE.SphereGeometry(0.22, 24, 16), steelMat);
+            scoop.scale.set(0.9, 0.3, 1.3);
+            scoop.position.y = 0.05;
+            stirSpoonGroup.add(scoop);
+
+            stirSpoonGroup.rotation.x = 0.38;
+            stirSpoonGroup.rotation.z = -0.2;
+            stirSpoonGroup.position.set(0, LIQUID_Y, 0);
+            stirSpoonGroup.visible = false;
+            scene.add(stirSpoonGroup);
+        }
+
+        function buildEtchingPen() {
+            penGroup = new THREE.Group();
+            const pin = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.02, 0.04, 2.2, 16),
+                new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.9, roughness: 0.2 })
+            );
+            pin.position.y = 1.1;
+            penGroup.add(pin);
+
+            const drop = new THREE.Mesh(
+                new THREE.SphereGeometry(0.06, 16, 12),
+                new THREE.MeshStandardMaterial({ color: 0x241107, roughness: 0.1 })
+            );
+            drop.position.y = 0.04;
+            penGroup.add(drop);
+
+            penGroup.rotation.x = 0.55;
+            penGroup.rotation.z = -0.3;
+            penGroup.visible = false;
+            scene.add(penGroup);
+        }
+
+        // ================= 6. 拉花：一圈圈叠加的柔和印章，沿路径连续画 =================
+        // 每个印章：白色奶泡中心 → 口味色的内圈 → 金色边缘 → 渐隐到咖啡色
+        function pourStamp(cx, cy, r) {
+            const g = liquidCtx.createRadialGradient(cx, cy, r * 0.25, cx, cy, r);
+            g.addColorStop(0.0, 'rgba(255, 250, 242, 1)');
+            g.addColorStop(0.5, 'rgba(255, 250, 242, 1)');
+            g.addColorStop(0.72, currentGelatoColor);
+            g.addColorStop(0.88, 'rgba(214, 150, 70, 0.95)');
+            g.addColorStop(1.0, 'rgba(60, 20, 5, 0)');
+            liquidCtx.fillStyle = g;
+            liquidCtx.beginPath();
+            liquidCtx.arc(cx, cy, r, 0, Math.PI * 2);
+            liquidCtx.fill();
+        }
+
+        // 把液面坐标 (0..1024) 转成屏幕上的一点
+        function liquidCoordsFromHit(point) {
+            const local = liquidMesh.worldToLocal(point.clone());
+            return {
+                x: ((local.x / 1.95) * 0.5 + 0.5) * 1024,
+                y: ((local.z / 1.95) * 0.5 + 0.5) * 1024
+            };
+        }
+
+        // ================= 7. 旋涡乳化：在咖啡中搅拌（保留原有算法） =================
+        function applyTrueFluidMixing(cx, cy, moveX, moveY, speed) {
+            const radius = 30 + 90 * brushScale();
+            const r2 = radius * radius;
+            const x0 = Math.max(0, Math.floor(cx - radius));
+            const y0 = Math.max(0, Math.floor(cy - radius));
+            const x1 = Math.min(1024, Math.ceil(cx + radius));
+            const y1 = Math.min(1024, Math.ceil(cy + radius));
+            const w = x1 - x0;
+            const h = y1 - y0;
+            if (w <= 4 || h <= 4) return;
+
+            const img = liquidCtx.getImageData(x0, y0, w, h);
+            const data = img.data;
+
+            let sumR = 0, sumG = 0, sumB = 0, count = 0;
+            for (let py = 0; py < h; py++) {
+                const dy = (y0 + py) - cy;
+                const row = py * w;
+                for (let px = 0; px < w; px++) {
+                    const dx = (x0 + px) - cx;
+                    if (dx * dx + dy * dy < r2) {
+                        const idx = (row + px) * 4;
+                        sumR += data[idx];
+                        sumG += data[idx + 1];
+                        sumB += data[idx + 2];
+                        count++;
+                    }
+                }
+            }
+            if (count === 0) return;
+            const avgR = sumR / count;
+            const avgG = sumG / count;
+            const avgB = sumB / count;
+
+            const mixRate = Math.min(0.08 + speed * 0.016, 0.42);
+            const advX = THREE.MathUtils.clamp(moveX * 0.35, -20, 20);
+            const advY = THREE.MathUtils.clamp(moveY * 0.35, -20, 20);
+
+            const src = new Uint8ClampedArray(data);
+
+            for (let py = 0; py < h; py++) {
+                const dy = (y0 + py) - cy;
+                const row = py * w;
+                for (let px = 0; px < w; px++) {
+                    const dx = (x0 + px) - cx;
+                    const d2 = dx * dx + dy * dy;
+                    if (d2 < r2) {
+                        const factor = 1 - Math.sqrt(d2) / radius;
+                        const localMix = mixRate * factor;
+
+                        const sx = Math.round(px - advX * factor);
+                        const sy = Math.round(py - advY * factor);
+                        let r, g, b;
+
+                        if (sx >= 0 && sx < w && sy >= 0 && sy < h) {
+                            const sIdx = (sy * w + sx) * 4;
+                            r = src[sIdx];
+                            g = src[sIdx + 1];
+                            b = src[sIdx + 2];
+                        } else {
+                            const idx = (row + px) * 4;
+                            r = src[idx];
+                            g = src[idx + 1];
+                            b = src[idx + 2];
+                        }
+
+                        const idx = (row + px) * 4;
+                        data[idx]     = Math.round(r * (1 - localMix) + avgR * localMix);
+                        data[idx + 1] = Math.round(g * (1 - localMix) + avgG * localMix);
+                        data[idx + 2] = Math.round(b * (1 - localMix) + avgB * localMix);
+                    }
+                }
+            }
+
+            liquidCtx.putImageData(img, x0, y0);
+            liquidTexture.needsUpdate = true;
+        }
+
+        // ================= 8. 彩笔：平滑的描边（二次曲线连接相邻点） =================
+        function drawPenStroke(p) {
+            penPts.push(p);
+            if (penPts.length > 3) penPts.shift();
+            if (penPts.length < 3) return;
+
+            const a = penPts[0], b = penPts[1], c = penPts[2];
+            const m1 = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+            const m2 = { x: (b.x + c.x) / 2, y: (b.y + c.y) / 2 };
+
+            liquidCtx.lineCap = 'round';
+            liquidCtx.lineJoin = 'round';
+            // 先画一层深色描边，颜色更跳，不会糊在咖啡里
+            liquidCtx.beginPath();
+            liquidCtx.moveTo(m1.x, m1.y);
+            liquidCtx.quadraticCurveTo(b.x, b.y, m2.x, m2.y);
+            liquidCtx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+            const penW = 4 + 16 * brushScale();
+            liquidCtx.lineWidth = penW + 5;
+            liquidCtx.stroke();
+            liquidCtx.strokeStyle = penColor;
+            liquidCtx.lineWidth = penW;
+            liquidCtx.stroke();
+            liquidTexture.needsUpdate = true;
+        }
+
+        // ================= 9. 交互调度 =================
+        function setBubble(text) {
+            const b = document.getElementById('maidBubble');
+            b.innerText = text;
+            b.style.display = 'block';
+        }
+
+        function updateContinuousInteraction() {
+            if (isInteracting && currentMode !== 'ORBIT' && currentHitPoint) actionDirty = true;
+            // 捏起来：球被拿着时跟随指针在杯口上方移动
+            if (currentMode === 'PINCH' && grabbedScoop) {
+                const p = groundPoint();
+                if (p) {
+                    const d = Math.hypot(p.x, p.z);
+                    const s = d > 1.6 ? 1.6 / d : 1;
+                    grabbedScoop.position.set(p.x * s, LIQUID_Y + SCOOP_R * 0.82 + 0.5, p.z * s);
+                }
+                return;
+            }
+
+            // 捏出尖角：按住球的表面拖动，表面被拉起一个柔和的尖
+            if (currentMode === 'PINCH' && pinchMode === 'peak' && isInteracting && currentHitPoint &&
+                currentHitObject && scoops.includes(currentHitObject)) {
+                pinchPeak(currentHitPoint);
+                return;
+            }
+
+            // 画画：杯身外壁或冰淇淋球上都能画，颜色用颜色条里选的
+            if (currentMode === 'CUP' && isInteracting && currentHitUV && currentHitObject) {
+                const obj = currentHitObject;
+                // 换了画的物体就重新起笔，避免两个画布之间连线
+                if (obj !== lastPaintObj) lastCanvasPos = null;
+                if (obj === cupBodyMesh) {
+                    lastCanvasPos = paintCup(currentHitUV, lastCanvasPos, currentHitPoint);
+                    lastPaintObj = obj;
+                    return;
+                }
+                if (scoops.includes(obj)) {
+                    lastCanvasPos = paintScoop(obj, currentHitUV, lastCanvasPos);
+                    lastPaintObj = obj;
+                    return;
+                }
+            }
+
+            if (!isInteracting || !currentHitPoint) return;
+
+            // 勺背压平：只压按到的冰淇淋球
+            if (currentMode === 'FLATTEN') {
+                if (currentHitObject && scoops.includes(currentHitObject)) {
+                    pressScoops(currentHitPoint);
+                }
+                return;
+            }
+
+            // 旋涡乳化：在咖啡液面上画圈搅拌
+            if (currentMode === 'SPOON' && currentHitObject === liquidMesh) {
+                snapshotLiquid();
+                stirSpoonGroup.position.set(currentHitPoint.x, LIQUID_Y, currentHitPoint.z);
+                stirSpoonGroup.rotation.x = 0.38;
+
+                const c = liquidCoordsFromHit(currentHitPoint);
+                let moveX = 0, moveY = 0, speed = 4;
+                if (lastCanvasPos) {
+                    moveX = c.x - lastCanvasPos.x;
+                    moveY = c.y - lastCanvasPos.y;
+                    speed = Math.hypot(moveX, moveY);
+                }
+                applyTrueFluidMixing(c.x, c.y, moveX, moveY, speed);
+                lastCanvasPos = c;
+                return;
+            }
+
+            // 金边拉花：按住越久奶泡越大，移动时沿路径连续盖章
+            if (currentMode === 'PITCHER' && currentHitObject === liquidMesh) {
+                snapshotLiquid();
+                const c = liquidCoordsFromHit(currentHitPoint);
+                pitcherMesh.rotation.x = 0.72;
+                milkStreamMesh.visible = true;
+                milkStreamMesh.material.color.set(currentGelatoColor);
+                milkStreamMesh.material.emissive.set(currentGelatoColor);
+
+                const holdSec = (performance.now() - actionStartTime) / 1000;
+                const s = brushScale();
+                const r = Math.min(10 + holdSec * (6 + 20 * s), 30 + 60 * s);
+
+                if (lastCanvasPos) {
+                    const dist = Math.hypot(c.x - lastCanvasPos.x, c.y - lastCanvasPos.y);
+                    const steps = Math.max(1, Math.ceil(dist / Math.max(r * 0.2, 2)));
+                    for (let s = 1; s <= steps; s++) {
+                        const t = s / steps;
+                        pourStamp(lastCanvasPos.x + (c.x - lastCanvasPos.x) * t,
+                                  lastCanvasPos.y + (c.y - lastCanvasPos.y) * t, r);
+                    }
+                } else {
+                    pourStamp(c.x, c.y, r);
+                }
+                lastCanvasPos = c;
+                liquidTexture.needsUpdate = true;
+                return;
+            }
+
+            // 描边彩笔：平滑曲线
+            if (currentMode === 'ETCH' && currentHitObject === liquidMesh) {
+                snapshotLiquid();
+                const c = liquidCoordsFromHit(currentHitPoint);
+                const last = penPts[penPts.length - 1];
+                if (!last || Math.hypot(c.x - last.x, c.y - last.y) > 2) {
+                    drawPenStroke(c);
+                }
+                lastCanvasPos = c;
+            }
+        }
+
+        function setMainMode(mode) {
+            currentMode = mode;
+            grabbedScoop = null;
+            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+
+            pitcherGroup.visible = (mode === 'PITCHER');
+            stirSpoonGroup.visible = (mode === 'FLATTEN' || mode === 'SPOON');
+            penGroup.visible = (mode === 'ETCH');
+            document.getElementById('pinchBar').style.display = mode === 'PINCH' ? 'flex' : 'none';
+            document.getElementById('penBar').style.display = (mode === 'ETCH' || mode === 'CUP') ? 'flex' : 'none';
+            document.getElementById('decoBar').style.display = mode === 'DECO' ? 'flex' : 'none';
+            const sized = ['PINCH', 'FLATTEN', 'SPOON', 'PITCHER', 'ETCH', 'CUP'].includes(mode);
+            document.getElementById('sizeBar').style.display = sized ? 'flex' : 'none';
+
+            const pills = {
+                ADD: ['btnToolAdd', '🍨 点一下杯子，放上一颗冰淇淋球（每颗都能换口味）'],
+                PINCH: ['btnToolPinch', '🤏 捏起来 (下方选：捏出尖角，或挪动冰淇淋球)'],
+                FLATTEN: ['btnToolFlatten', '🥄 勺背压平 (按住冰淇淋球上方滑动，压成柔软的一层)'],
+                SPOON: ['btnToolSpoon', '🌪️ 旋涡乳化 (在咖啡中搅拌，把冰淇淋与咖啡融匀)'],
+                PITCHER: ['btnToolPitcher', '🥛 金边拉花 (按住不动会鼓起奶泡，移动就画出纹路)'],
+                ETCH: ['btnToolEtch', '🍫 描边彩笔 (下方选颜色，在咖啡液面上画线条)'],
+                DECO: ['btnToolDeco', '🍋 小装饰 (下方选一种，点在冰淇淋或咖啡上放上去)'],
+                CUP: ['btnToolCup', '🎨 画画 (下方选颜色，在杯子外壁或冰淇淋球上画)'],
+                ORBIT: ['btnToolOrbit', '🖐️ 转视角 (拖动旋转，Shift+拖动平移；其他模式下右键或双指拖动也能转)']
+            };
+            const [btnId, text] = pills[mode];
+            document.getElementById(btnId).classList.add('active');
+            document.getElementById('modePill').innerText = text;
+        }
+
+        function setBrushLevel(v) {
+            brushLevel = Number(v);
+            document.getElementById('sizeVal').innerText = v;
+        }
+
+        function setPinchMode(mode, elem) {
+            pinchMode = mode;
+            grabbedScoop = null;
+            document.querySelectorAll('#pinchBar .deco-btn').forEach(d => d.classList.remove('active'));
+            if (elem) elem.classList.add('active');
+        }
+
+        // 捏出尖角：指针下的球面被慢慢往上拉，离指针越近拉得越高，形成柔和的尖
+        function pinchPeak(curPoint) {
+            const s = brushScale();
+            const PR = 0.2 + 0.3 * s;      // 作用范围（球的局部单位）
+            const RATE = 0.006 + 0.03 * s; // 每帧拉起比例
+            const LIFT = 0.3;  // 尖角比指针高出的距离
+
+            for (const m of scoops) {
+                if (m.position.distanceTo(curPoint) > SCOOP_R * 1.4) continue;
+
+                const pl = m.worldToLocal(curPoint.clone());
+                const target = pl.y + LIFT;
+                const pos = m.geometry.attributes.position;
+                let changed = false;
+
+                for (let v = 0; v < pos.count; v++) {
+                    const dx = pos.getX(v) - pl.x, dz = pos.getZ(v) - pl.z;
+                    const d = Math.hypot(dx, dz);
+                    if (d >= PR) continue;
+
+                    const f = 1 - (d / PR) * (d / PR);
+                    const y = pos.getY(v);
+                    if (y < target) {
+                        pos.setY(v, y + (target - y) * RATE * f * f);
+                        changed = true;
+                    }
+                }
+
+                if (changed) {
+                    pos.needsUpdate = true;
+                    m.geometry.computeVertexNormals();
+                    m.geometry.computeBoundingSphere();
+                }
+            }
+        }
+
+        // 在冰淇淋球上画：沿笔迹盖椭圆印章，横向按纬度拉宽，抵消球面贴图的拉伸
+        function paintScoop(mesh, uv, from) {
+            const { canvas, ctx, tex } = mesh.userData;
+            const W = canvas.width, H = canvas.height;
+            const x = uv.x * W;
+            const y = (1 - uv.y) * H;
+
+            // 本次操作第一次画这颗球时，先存一份画布，撤回时用
+            if (pendingUndo && !pendingUndo.ballCanvases.has(mesh)) {
+                pendingUndo.ballCanvases.set(mesh, cloneCanvas(canvas));
+            }
+
+            const ry = 2 + 8 * brushScale();
+            ctx.fillStyle = penColor;
+            const stamp = (sx, sy) => {
+                const theta = (sy / H) * Math.PI;
+                const rx = ry / Math.max(Math.sin(theta), 0.15);
+                // 靠近左右接缝时，在另一侧也补画一份
+                for (const ox of [0, -W, W]) {
+                    if (ox !== 0 && (sx + ox + rx < 0 || sx + ox - rx > W)) continue;
+                    ctx.beginPath();
+                    ctx.ellipse(sx + ox, sy, rx, ry, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            };
+
+            if (from) {
+                // 跨过左右接缝时走较短的那一边，接缝两侧都能连上
+                let fx = from.x;
+                if (x - fx > W / 2) fx += W;
+                else if (fx - x > W / 2) fx -= W;
+                const dist = Math.hypot(x - fx, y - from.y);
+                const steps = Math.max(1, Math.ceil(dist / (ry * 0.5)));
+                for (let i = 1; i <= steps; i++) {
+                    const t = i / steps;
+                    const px = fx + (x - fx) * t;
+                    stamp(((px % W) + W) % W, from.y + (y - from.y) * t);
+                }
+            } else {
+                stamp(x, y);
+            }
+            tex.needsUpdate = true;
+            return { x: x, y: y };
+        }
+
+        // 画杯子：沿笔迹盖椭圆印章。笔刷按真实尺寸换算成像素，
+        // 横向再按命中点到杯轴的半径补偿，杯口和杯底画出来一样粗
+        function paintCup(uv, from, point) {
+            const W = cupCanvas.width, H = cupCanvas.height;
+            const x = uv.x * W;
+            const y = (1 - uv.y) * H;
+
+            // 本次操作第一次画杯子时，先存一份画布，撤回时用
+            if (pendingUndo && !pendingUndo.cup) pendingUndo.cup = cloneCanvas(cupCanvas);
+
+            const r = Math.max(Math.hypot(point.x, point.z), 0.5);
+            const rad = 0.02 + 0.08 * brushScale();          // 笔刷半径（世界单位）
+            const ry = rad * H / cupProfileLen;
+            const rx = rad * W / (2 * Math.PI * r);
+
+            cupCtx.fillStyle = penColor;
+            const stamp = (sx, sy) => {
+                for (const ox of [0, -W, W]) {
+                    if (ox !== 0 && (sx + ox + rx < 0 || sx + ox - rx > W)) continue;
+                    cupCtx.beginPath();
+                    cupCtx.ellipse(sx + ox, sy, rx, ry, 0, 0, Math.PI * 2);
+                    cupCtx.fill();
+                }
+            };
+
+            if (from) {
+                // 跨过左右接缝时走较短的那一边，接缝两侧都能连上
+                let fx = from.x;
+                if (x - fx > W / 2) fx += W;
+                else if (fx - x > W / 2) fx -= W;
+                const dist = Math.hypot(x - fx, y - from.y);
+                const steps = Math.max(1, Math.ceil(dist / (Math.min(rx, ry) * 0.5)));
+                for (let i = 1; i <= steps; i++) {
+                    const t = i / steps;
+                    const px = fx + (x - fx) * t;
+                    stamp(((px % W) + W) % W, from.y + (y - from.y) * t);
+                }
+            } else {
+                stamp(x, y);
+            }
+            cupTexture.needsUpdate = true;
+            return { x: x, y: y };
+        }
+
+        function setPenColor(hex, elem) {
+            penColor = hex;
+            document.querySelectorAll('.pen-dot').forEach(d => d.classList.remove('active'));
+            if (elem) elem.classList.add('active');
+        }
+
+        function setDecoType(type, elem) {
+            currentDeco = type;
+            document.querySelectorAll('.deco-btn').forEach(d => d.classList.remove('active'));
+            if (elem) elem.classList.add('active');
+        }
+
+        // 捏起来：指针射线与杯口上方的水平面求交，得到球该去的位置
+        function groundPoint() {
+            const p = raycaster.ray.intersectPlane(groundPlane, groundHit);
+            return p ? p.clone() : null;
+        }
+
+        // 小装饰：用几何体拼出来，每一种都有自己的颜色
+        function buildDecoration(type) {
+            const g = new THREE.Group();
+            const part = (geo, color, x, y, z) => {
+                const m = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({
+                    color: new THREE.Color(color).convertSRGBToLinear(),
+                    roughness: 0.35,
+                    clearcoat: 0.3,
+                    clearcoatRoughness: 0.3
+                }));
+                m.position.set(x, y, z);
+                m.castShadow = true;
+                g.add(m);
+                return m;
+            };
+
+            if (type === 'lemon') {
+                // 柠檬片：黄色外皮 + 浅黄果肉 + 六瓣分隔
+                part(new THREE.CylinderGeometry(0.42, 0.42, 0.08, 48), 0xffd93b, 0, 0.04, 0);
+                part(new THREE.CylinderGeometry(0.36, 0.36, 0.09, 48), 0xfff1a6, 0, 0.045, 0);
+                for (let k = 0; k < 6; k++) {
+                    const seg = part(new THREE.BoxGeometry(0.03, 0.1, 0.34), 0xfff8c9, 0, 0.05, 0);
+                    seg.rotation.y = k * Math.PI / 3;
+                }
+            } else if (type === 'strawberry') {
+                // 草莓：尖端朝下的红色圆锥 + 绿色花萼
+                const body = new THREE.ConeGeometry(0.24, 0.42, 32);
+                body.rotateX(Math.PI);
+                part(body, 0xe8334a, 0, 0.21, 0);
+                for (let k = 0; k < 5; k++) {
+                    const leaf = part(new THREE.SphereGeometry(0.1, 16, 8), 0x3fa34d, 0, 0.42, 0);
+                    leaf.scale.set(1.8, 0.2, 1.0);
+                    leaf.rotation.y = k * 2 * Math.PI / 5;
+                }
+            } else if (type === 'cherry') {
+                // 樱桃：两颗红球 + 细梗 + 小叶子
+                part(new THREE.SphereGeometry(0.18, 24, 16), 0xc1121f, -0.1, 0.18, 0);
+                part(new THREE.SphereGeometry(0.18, 24, 16), 0xc1121f, 0.12, 0.2, 0.04);
+                const stem = part(new THREE.CylinderGeometry(0.012, 0.012, 0.4, 8), 0x5b8c3a, 0.0, 0.4, 0);
+                stem.rotation.z = -0.4;
+                const leaf = part(new THREE.SphereGeometry(0.12, 16, 8), 0x3fa34d, 0.18, 0.5, 0);
+                leaf.scale.set(1.6, 0.2, 0.9);
+            } else if (type === 'mint') {
+                // 薄荷叶：扁平的绿叶
+                const leaf = part(new THREE.SphereGeometry(0.22, 24, 16), 0x3cb371, 0, 0.02, 0);
+                leaf.scale.set(1, 0.08, 0.55);
+            } else if (type === 'cookie') {
+                // 饼干：棕色圆片 + 几颗巧克力豆
+                part(new THREE.CylinderGeometry(0.32, 0.32, 0.09, 48), 0xc98a4b, 0, 0.045, 0);
+                for (let k = 0; k < 6; k++) {
+                    const a = k * Math.PI / 3 + 0.3;
+                    part(new THREE.SphereGeometry(0.04, 12, 10), 0x3b1d0e, Math.cos(a) * 0.18, 0.1, Math.sin(a) * 0.18);
+                }
+            } else {
+                // 巧克力碎：一小撮深色碎屑
+                for (let k = 0; k < 8; k++) {
+                    const a = k * 0.9;
+                    const rr = 0.08 + (k % 3) * 0.08;
+                    part(new THREE.SphereGeometry(0.045, 12, 10), 0x2a1408, Math.cos(a) * rr, 0.04, Math.sin(a) * rr);
+                }
+            }
+            return g;
+        }
+
+        function placeDecoration(hit) {
+            if (!hit.object || (hit.object !== liquidMesh && !scoops.includes(hit.object))) return;
+            const g = buildDecoration(currentDeco);
+            g.position.set(hit.point.x, hit.point.y + 0.03, hit.point.z);
+            g.rotation.y = Math.random() * Math.PI * 2;
+            scene.add(g);
+            decos.push(g);
+            actionDirty = true;
+        }
+
+        // 复制一张画布，用来保存某一时刻的样子
+        function cloneCanvas(src) {
+            const c = document.createElement('canvas');
+            c.width = src.width;
+            c.height = src.height;
+            c.getContext('2d').drawImage(src, 0, 0);
+            return c;
+        }
+
+        // 记录当前全部内容：冰淇淋球（位置和形状）、装饰、液面画布、杯身画布
+        function captureState() {
+            return {
+                scoops: scoops.slice(),
+                scoopPos: scoops.map(m => m.position.clone()),
+                scoopGeo: scoops.map(m => m.geometry.attributes.position.array.slice()),
+                decos: decos.slice(),
+                liquid: null,             // 改动液面前才保存
+                cup: null,                // 画杯子前才保存
+                ballCanvases: new Map()   // 画过的球才会存进来
+            };
+        }
+
+        function restoreState(s) {
+            for (const m of scoops) if (!s.scoops.includes(m)) scene.remove(m);
+            for (const g of decos) if (!s.decos.includes(g)) scene.remove(g);
+            for (const m of s.scoops) if (!scoops.includes(m)) scene.add(m);
+            for (const g of s.decos) if (!decos.includes(g)) scene.add(g);
+
+            scoops.length = 0;
+            scoops.push(...s.scoops);
+            decos.length = 0;
+            decos.push(...s.decos);
+
+            s.scoops.forEach((m, i) => {
+                m.position.copy(s.scoopPos[i]);
+                const attr = m.geometry.attributes.position;
+                attr.array.set(s.scoopGeo[i]);
+                attr.needsUpdate = true;
+                m.geometry.computeVertexNormals();
+                m.geometry.computeBoundingSphere();
+            });
+
+            if (s.liquid) {
+                liquidCtx.clearRect(0, 0, liquidCanvas.width, liquidCanvas.height);
+                liquidCtx.drawImage(s.liquid, 0, 0);
+                liquidTexture.needsUpdate = true;
+            }
+            if (s.cup) {
+                cupCtx.clearRect(0, 0, cupCanvas.width, cupCanvas.height);
+                cupCtx.drawImage(s.cup, 0, 0);
+                cupTexture.needsUpdate = true;
+            }
+
+            for (const [m, c] of s.ballCanvases) {
+                m.userData.ctx.clearRect(0, 0, c.width, c.height);
+                m.userData.ctx.drawImage(c, 0, 0);
+                m.userData.tex.needsUpdate = true;
+            }
+
+            grabbedScoop = null;
+        }
+
+        // 本次操作第一次改液面时，先存一份液面画布
+        function snapshotLiquid() {
+            if (pendingUndo && !pendingUndo.liquid) pendingUndo.liquid = cloneCanvas(liquidCanvas);
+        }
+
+        function pushUndo(state) {
+            undoStack.push(state);
+            if (undoStack.length > UNDO_MAX) undoStack.shift();
+        }
+
+        function undo() {
+            const s = undoStack.pop();
+            if (!s) {
+                setBubble('现在没有可以撤回的步骤啦~');
+                return;
+            }
+            restoreState(s);
+        }
+
+        function resetCup() {
+            const state = captureState();
+            state.liquid = cloneCanvas(liquidCanvas);
+            state.cup = cloneCanvas(cupCanvas);
+            pushUndo(state);
+
+            for (const m of scoops) scene.remove(m);
+            scoops.length = 0;
+            for (const d of decos) scene.remove(d);
+            decos.length = 0;
+            drawFreshCremaBase();
+            liquidTexture.needsUpdate = true;
+
+            cupCtx.fillStyle = '#ffffff';
+            cupCtx.fillRect(0, 0, cupCanvas.width, cupCanvas.height);
+            cupTexture.needsUpdate = true;
+            setBubble('杯子已经清空啦，可以点"撤回"找回刚才的内容~ 🍨');
+        }
+
+        // ================= 10. 全局触控拖拽交互 =================
+        const raycaster = new THREE.Raycaster();
+        const pointerNDC = new THREE.Vector2();
+
+        function setupPointerEvents() {
+            const box = document.getElementById('webgl-box');
+
+            function getCoords(cx, cy) {
+                const rect = renderer.domElement.getBoundingClientRect();
+                pointerNDC.x = ((cx - rect.left) / rect.width) * 2 - 1;
+                pointerNDC.y = -((cy - rect.top) / rect.height) * 2 + 1;
+            }
+
+            function touchCentroid(e) {
+                const a = e.touches[0], b = e.touches[1];
+                return { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
+            }
+
+            function touchDist(e) {
+                const a = e.touches[0], b = e.touches[1];
+                return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+            }
+
+            function handleStart(e) {
+                // 第二根手指放下：取消当前操作，进入缩放
+                if (e.touches && e.touches.length >= 2) {
+                    if (pendingUndo && actionDirty) pushUndo(pendingUndo);
+                    pendingUndo = null;
+                    if (grabbedScoop) {
+                        grabbedScoop.position.y = LIQUID_Y + SCOOP_R * 0.82;
+                        grabbedScoop = null;
+                    }
+                    isInteracting = false;
+                    milkStreamMesh.visible = false;
+                    pinchStartDist = touchDist(e);
+                    pinchStartRadius = camRadius;
+                    lastCentroid = touchCentroid(e);
+                    if (e.cancelable) e.preventDefault();
+                    return;
+                }
+                // 鼠标右键：任何模式下都能转视角；中键或 Shift+左键：平移
+                if (!e.touches && (e.button === 2 || e.button === 1 || (e.button === 0 && e.shiftKey))) {
+                    orbitDrag = e.button === 2;
+                    panDrag = !orbitDrag;
+                    lastPointerPos = { x: e.clientX, y: e.clientY };
+                    e.preventDefault();
+                    return;
+                }
+                if (e.touches && e.cancelable) e.preventDefault();
+                isInteracting = true;
+                actionStartTime = performance.now();
+                pendingUndo = currentMode === 'ORBIT' ? null : captureState();
+                lastPaintObj = null;
+                actionDirty = false;
+                lastCanvasPos = null;
+                penPts = [];
+
+                const pt = e.touches ? e.touches[0] : e;
+                lastPointerPos = { x: pt.clientX, y: pt.clientY };
+                getCoords(pt.clientX, pt.clientY);
+                raycastScene();
+                lastHitPoint = currentHitPoint ? currentHitPoint.clone() : null;
+
+                // 放冰淇淋：点一下放一颗，不跟随拖拽
+                if (currentMode === 'ADD' && currentHitPoint) {
+                    placeScoop({ point: currentHitPoint, object: currentHitObject });
+                    isInteracting = false;
+                }
+                // 捏起来（挪动）：按住冰淇淋球就能拿起来
+                if (currentMode === 'PINCH' && pinchMode === 'move' && currentHitObject && scoops.includes(currentHitObject)) {
+                    grabbedScoop = currentHitObject;
+                }
+                // 小装饰：点一下放上去
+                if (currentMode === 'DECO' && currentHitPoint) {
+                    placeDecoration({ point: currentHitPoint, object: currentHitObject });
+                    isInteracting = false;
+                }
+                // 画画 / 彩笔：按下就落第一笔
+                if (currentMode === 'CUP' || currentMode === 'ETCH') updateContinuousInteraction();
+            }
+
+            function handleMove(e) {
+                if (e.touches && e.touches.length >= 2 && pinchStartDist > 0) {
+                    const d = touchDist(e);
+                    if (d > 0) {
+                        camRadius = THREE.MathUtils.clamp(pinchStartRadius * pinchStartDist / d, CAM_MIN, CAM_MAX);
+                    }
+                    // 双指一起拖动：转视角
+                    const c = touchCentroid(e);
+                    if (lastCentroid) orbitBy(c.x - lastCentroid.x, c.y - lastCentroid.y);
+                    lastCentroid = c;
+                    updateCameraPosition();
+                    if (e.cancelable) e.preventDefault();
+                    return;
+                }
+                const pt = e.touches ? e.touches[0] : e;
+                const deltaX = pt.clientX - lastPointerPos.x;
+                const deltaY = pt.clientY - lastPointerPos.y;
+                lastPointerPos = { x: pt.clientX, y: pt.clientY };
+
+                if (orbitDrag || (currentMode === 'ORBIT' && isInteracting)) {
+                    orbitBy(deltaX, deltaY);
+                } else if (panDrag) {
+                    panBy(deltaX, deltaY);
+                } else {
+                    getCoords(pt.clientX, pt.clientY);
+                    raycastScene();
+                    // 画画 / 彩笔：每个移动事件都画，不只每帧画一次
+                    if (currentMode === 'CUP' || currentMode === 'ETCH') updateContinuousInteraction();
+                }
+
+                if (e.touches && e.cancelable) e.preventDefault();
+            }
+
+            function handleEnd() {
+                isInteracting = false;
+                pinchStartDist = 0;
+                orbitDrag = false;
+                panDrag = false;
+                lastCentroid = null;
+                if (pendingUndo) {
+                    if (actionDirty) pushUndo(pendingUndo);
+                    pendingUndo = null;
+                }
+                if (grabbedScoop) {
+                    grabbedScoop.position.y = LIQUID_Y + SCOOP_R * 0.82;
+                    grabbedScoop = null;
+                }
+                lastCanvasPos = null;
+                lastHitPoint = null;
+                milkStreamMesh.visible = false;
+                pitcherMesh.rotation.x = 0.35;
+            }
+
+            box.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                zoomBy(1 + THREE.MathUtils.clamp(e.deltaY, -100, 100) * 0.0015);
+            }, { passive: false });
+
+            box.addEventListener('contextmenu', (e) => e.preventDefault());
+            box.addEventListener('mousedown', handleStart);
+            window.addEventListener('mousemove', handleMove);
+            window.addEventListener('mouseup', handleEnd);
+
+            box.addEventListener('touchstart', handleStart, { passive: false });
+            window.addEventListener('touchmove', handleMove, { passive: false });
+            window.addEventListener('touchend', handleEnd);
+            window.addEventListener('touchcancel', handleEnd);
+        }
+
+        function raycastScene() {
+            raycaster.setFromCamera(pointerNDC, camera);
+
+            // 优先检测冰淇淋球与咖啡液面
+            const targets = [...scoops, liquidMesh, cupBodyMesh, saucerMesh, tableMesh];
+            const hits = raycaster.intersectObjects(targets);
+
+            if (hits.length > 0) {
+                currentHitPoint = hits[0].point;
+                currentHitObject = hits[0].object;
+                currentHitUV = hits[0].uv || null;
+
+                if (currentMode === 'PITCHER') {
+                    pitcherGroup.position.set(currentHitPoint.x, currentHitPoint.y + 1.6, currentHitPoint.z + 0.35);
+                } else if (currentMode === 'FLATTEN' || currentMode === 'SPOON') {
+                    stirSpoonGroup.position.set(currentHitPoint.x, currentHitPoint.y, currentHitPoint.z);
+                } else if (currentMode === 'ETCH') {
+                    penGroup.position.copy(currentHitPoint);
+                }
+            } else {
+                currentHitPoint = null;
+                currentHitObject = null;
+                currentHitUV = null;
+            }
+        }
+
+        // ================= 11. 魔法与结算 =================
+        function castSpell() {
+            milkStreamMesh.visible = false;
+            pitcherGroup.visible = false;
+            stirSpoonGroup.visible = false;
+            penGroup.visible = false;
+            document.getElementById('modePill').innerText = "✨ 变得香甜美味吧~ 萌萌啾！💖";
+
+            for (let i = 0; i < 24; i++) {
+                setTimeout(() => {
+                    const sp = document.createElement('div');
+                    sp.className = 'sparkle-heart';
+                    sp.innerText = ['🍨', '☕', '💖', '✨', '🐾'][Math.floor(Math.random() * 5)];
+                    sp.style.left = (Math.random() * (window.innerWidth - 60) + 30) + 'px';
+                    sp.style.top = (window.innerHeight * 0.5 + (Math.random() * 80 - 40)) + 'px';
+                    document.body.appendChild(sp);
+                    setTimeout(() => sp.remove(), 1200);
+                }, i * 65);
+            }
+
+            setCamPreset('SIDE');
+
+            setTimeout(() => {
+                setBubble("主人亲手放上的冰淇淋球和拉花太诱人啦！请尽情享用这份甜蜜吧~ 🍨💕");
+            }, 1600);
+        }
+
+        function toggleBubble() {
+            const b = document.getElementById('maidBubble');
+            b.style.display = b.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function onResize() {
+            const box = document.getElementById('webgl-box');
+            camera.aspect = box.clientWidth / box.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(box.clientWidth, box.clientHeight);
+            updateCameraPosition();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (currentMode !== 'ORBIT') {
+                updateContinuousInteraction();
+            }
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                undo();
+            }
+        });
+
+        window.onload = init;
+    </script>
+</body>
+</html>
