@@ -284,6 +284,10 @@
             accent-color: #ff4d6d;
         }
 
+        /* 道具角度：在幅度滑条下面 */
+        .angle-bar { top: 152px; }
+        .angle-bar input { width: 84px; }
+
         /* 右侧缩放按钮 */
         .zoom-ctrl {
             position: absolute;
@@ -404,6 +408,14 @@
         <span class="sub-label">幅度</span>
         <input type="range" id="sizeRange" min="1" max="10" step="1" value="3" oninput="setBrushLevel(this.value)">
         <span class="sub-label" id="sizeVal">3</span>
+    </div>
+
+    <!-- 道具角度：朝向 -180°~180°，倾斜 -35°~35° -->
+    <div class="size-bar angle-bar" id="angleBar">
+        <span class="sub-label">朝向</span>
+        <input type="range" id="yawRange" min="-180" max="180" step="5" value="0" oninput="setToolYaw(this.value)">
+        <span class="sub-label">倾斜</span>
+        <input type="range" id="tiltRange" min="-35" max="35" step="5" value="0" oninput="setToolTilt(this.value)">
     </div>
 
     <!-- 缩放：也可以用滚轮或双指捏合 -->
@@ -534,6 +546,8 @@
         const undoStack = [];       // 撤回栈：每一步之前的快照
         const UNDO_MAX = 30;
         let brushLevel = 3;         // 幅度 1~10
+        let toolYaw = 0;            // 道具朝向（弧度），相对镜头
+        let toolTilt = 0;           // 道具倾斜（弧度）
         let lastPaintObj = null;    // 画画时上一笔落在哪个物体上
         const assets = [];          // 自己上传的素材：{ id, name, canvas, tex }
         const ASSET_MAX = 12;
@@ -1462,6 +1476,7 @@
             document.getElementById('stampChips').style.display = mode === 'CUP' ? 'contents' : 'none';
             const sized = ['PINCH', 'CLAY', 'FLATTEN', 'SPOON', 'PITCHER', 'ETCH', 'CUP'].includes(mode);
             document.getElementById('sizeBar').style.display = sized ? 'flex' : 'none';
+            document.getElementById('angleBar').style.display = ['FLATTEN', 'SPOON', 'PITCHER', 'ETCH'].includes(mode) ? 'flex' : 'none';
 
             const pills = {
                 ADD: ['btnToolAdd', '🍨 选好形状和大小，点一下杯子放一颗（每颗都能换口味）'],
@@ -1478,6 +1493,26 @@
             const [btnId, text] = pills[mode];
             document.getElementById(btnId).classList.add('active');
             document.getElementById('modePill').innerText = text;
+        }
+
+        function setToolYaw(deg) {
+            toolYaw = THREE.MathUtils.degToRad(Number(deg));
+        }
+
+        function setToolTilt(deg) {
+            toolTilt = THREE.MathUtils.degToRad(Number(deg));
+        }
+
+        // 每帧摆好道具的角度。朝向加上镜头的方位角：转了视角，道具也跟着转，看起来始终是同一个方向
+        function applyToolPose() {
+            const yaw = camTheta + toolYaw;
+            stirSpoonGroup.rotation.order = 'YXZ';
+            stirSpoonGroup.rotation.set((currentMode === 'FLATTEN' ? 0.18 : 0.38) + toolTilt, yaw, -0.2);
+            // 拉花缸只转朝向：奶流挂在它下面，倾斜会把奶流也歪掉
+            pitcherGroup.rotation.order = 'YXZ';
+            pitcherGroup.rotation.set(0, yaw, 0);
+            penGroup.rotation.order = 'YXZ';
+            penGroup.rotation.set(0.55 + toolTilt, yaw, -0.3);
         }
 
         function setBrushLevel(v) {
@@ -2400,6 +2435,7 @@
             if (currentMode !== 'ORBIT') {
                 updateContinuousInteraction();
             }
+            applyToolPose();
             renderer.render(scene, camera);
         }
 
