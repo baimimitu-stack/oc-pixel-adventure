@@ -201,6 +201,8 @@
         /* 子面板：彩笔颜色 / 装饰选择 */
         .sub-bar {
             display: none;
+            flex-wrap: wrap;
+            row-gap: 6px;
             position: absolute;
             left: 10px; right: 10px;
             bottom: 170px;
@@ -249,6 +251,19 @@
             color: #fff;
             border-color: #ff4d6d;
         }
+
+        /* 自己上传的素材：缩略图按钮 */
+        .deco-upload { background: #fff; border-style: dashed; }
+        .deco-btn.asset-btn { padding: 3px 6px; display: inline-flex; align-items: center; }
+        .asset-thumb { width: 24px; height: 24px; border-radius: 6px; display: block; }
+        .stamp-chips { display: contents; }
+        .pen-dot.asset-chip {
+            border-radius: 7px;
+            padding: 0;
+            overflow: hidden;
+            background: #fff;
+        }
+        .pen-dot.asset-chip canvas { width: 100%; height: 100%; display: block; }
 
         /* 幅度滑条：控制笔刷大小和变化速度 */
         .size-bar {
@@ -318,7 +333,9 @@
                 font-size: 11px;
                 padding: 6px 10px;
                 max-width: calc(100% - 190px);
-                line-height: 1.35;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
             .icon-btn { width: 38px; height: 38px; font-size: 16px; }
             /* 9 个工具分两行全部显示：图标在上、文字在下 */
@@ -398,6 +415,32 @@
     <div id="webgl-box"></div>
 
     <div class="latte-bar">
+        <!-- 冰淇淋形状和大小（仅放冰淇淋模式显示） -->
+        <div class="sub-bar" id="shapeBar">
+            <span class="sub-label">形状</span>
+            <button class="deco-btn shape-btn active" onclick="setShape('ball', this)">⚪ 圆球</button>
+            <button class="deco-btn shape-btn" onclick="setShape('flat', this)">🥞 扁圆</button>
+            <button class="deco-btn shape-btn" onclick="setShape('cube', this)">🧊 方块</button>
+            <button class="deco-btn shape-btn" onclick="setShape('heart', this)">💗 爱心</button>
+            <button class="deco-btn shape-btn" onclick="setShape('star', this)">⭐ 星星</button>
+            <button class="deco-btn shape-btn" onclick="setShape('cat', this)">🐱 猫头</button>
+            <button class="deco-btn shape-btn" onclick="setShape('drop', this)">💧 水滴</button>
+            <button class="deco-btn shape-btn" onclick="setShape('swirl', this)">🍦 甜筒</button>
+            <span class="sub-label">大小</span>
+            <button class="deco-btn size-btn" onclick="setScoopSize(0.7, this)">小</button>
+            <button class="deco-btn size-btn active" onclick="setScoopSize(1, this)">中</button>
+            <button class="deco-btn size-btn" onclick="setScoopSize(1.35, this)">大</button>
+        </div>
+
+        <!-- 橡皮泥手法（仅橡皮泥模式显示） -->
+        <div class="sub-bar" id="clayBar">
+            <span class="sub-label">手法</span>
+            <button class="deco-btn active" onclick="setClayMode('push', this)">👉 推</button>
+            <button class="deco-btn" onclick="setClayMode('squeeze', this)">🤲 挤</button>
+            <button class="deco-btn" onclick="setClayMode('poke', this)">☝️ 戳</button>
+            <button class="deco-btn" onclick="setClayMode('smooth', this)">🫳 抹</button>
+        </div>
+
         <!-- 捏的方式（仅捏起来模式显示） -->
         <div class="sub-bar" id="pinchBar">
             <span class="sub-label">捏</span>
@@ -416,6 +459,7 @@
             <button class="pen-dot" style="background:#ff7eb6;" onclick="setPenColor('#ff7eb6', this)" title="樱花粉"></button>
             <button class="pen-dot" style="background:#ffffff;" onclick="setPenColor('#ffffff', this)" title="奶白"></button>
             <button class="pen-dot" style="background:#3b1d0e;" onclick="setPenColor('#3b1d0e', this)" title="巧克力"></button>
+            <span class="stamp-chips" id="stampChips"></span>
         </div>
 
         <!-- 小装饰选择（仅小装饰模式显示） -->
@@ -426,12 +470,15 @@
             <button class="deco-btn" onclick="setDecoType('mint', this)">🌿 薄荷叶</button>
             <button class="deco-btn" onclick="setDecoType('cookie', this)">🍪 饼干</button>
             <button class="deco-btn" onclick="setDecoType('chips', this)">🍫 巧克力碎</button>
+            <button class="deco-btn deco-upload" onclick="pickAsset()">📷 上传图片</button>
+            <input type="file" id="assetInput" accept="image/*" multiple hidden>
         </div>
 
         <!-- 功能模式切换 -->
         <div class="tool-switch">
             <button class="tool-btn active" id="btnToolAdd" onclick="setMainMode('ADD')"><span class="tb-ico">🍨</span><span>放冰淇淋</span></button>
             <button class="tool-btn" id="btnToolPinch" onclick="setMainMode('PINCH')"><span class="tb-ico">🤏</span><span>捏起来</span></button>
+            <button class="tool-btn" id="btnToolClay" onclick="setMainMode('CLAY')"><span class="tb-ico">🧸</span><span>橡皮泥</span></button>
             <button class="tool-btn" id="btnToolFlatten" onclick="setMainMode('FLATTEN')"><span class="tb-ico">🥄</span><span>勺背压平</span></button>
             <button class="tool-btn" id="btnToolSpoon" onclick="setMainMode('SPOON')"><span class="tb-ico">🌪️</span><span>旋涡乳化</span></button>
             <button class="tool-btn" id="btnToolPitcher" onclick="setMainMode('PITCHER')"><span class="tb-ico">🥛</span><span>金边拉花</span></button>
@@ -478,12 +525,21 @@
         const groundHit = new THREE.Vector3();
         let currentHitUV = null;    // 命中点在网格上的 uv，用来把字画到杯子上
         let pinchMode = 'peak';     // 捏起来：'peak' 捏出尖角 | 'move' 挪动
+        let currentShape = 'ball';  // 新放的冰淇淋形状
+        let currentScoopSize = 1;   // 新放的冰淇淋大小
+        let clayMode = 'push';      // 橡皮泥：'push' 推 | 'squeeze' 挤 | 'poke' 戳 | 'smooth' 抹
+        let clayGrab = null;        // 推的时候抓住的那一块
         let cupCanvas = null, cupCtx = null, cupTexture = null;
         let cupProfileLen = 1;      // 杯身轮廓总长度，用来换算笔刷大小
         const undoStack = [];       // 撤回栈：每一步之前的快照
         const UNDO_MAX = 30;
         let brushLevel = 3;         // 幅度 1~10
         let lastPaintObj = null;    // 画画时上一笔落在哪个物体上
+        const assets = [];          // 自己上传的素材：{ id, name, canvas, tex }
+        const ASSET_MAX = 12;
+        let currentStamp = null;    // 画画时选中的素材印章（null 表示用颜色画）
+        let stampedThisStroke = false;
+        let currentHitFace = null;  // 命中的面，用来让贴纸贴着表面
 
         // 把幅度换算成 0.1~1 的系数，各工具按它决定大小和速度
         function brushScale() {
@@ -562,6 +618,7 @@
 
             setupPointerEvents();
             window.addEventListener('resize', onResize);
+            setMainMode('ADD');
             animate();
         }
 
@@ -843,7 +900,6 @@
             if (Math.hypot(p.x, p.z) > 1.85) return;
 
             const onScoop = scoops.includes(hit.object);
-            const y = onScoop ? p.y + SCOOP_R * 0.5 : LIQUID_Y + SCOOP_R * 0.82;
 
             // 每颗球一张画布：底色就是口味色，之后可以在上面画画
             const canvas = document.createElement('canvas');
@@ -865,19 +921,137 @@
                 clearcoatRoughness: 0.35
             });
             // 球的两极转到左右两侧，正面和顶部画画时不容易变形
-            const geo = new THREE.SphereGeometry(SCOOP_R, 64, 48);
-            geo.rotateZ(Math.PI / 2);
+            const geo = buildScoopGeometry(currentShape);
             const mesh = new THREE.Mesh(geo, mat);
             mesh.userData.canvas = canvas;
             mesh.userData.ctx = ctx;
             mesh.userData.tex = tex;
-            mesh.scale.set(1.08, 0.9, 1.08);
+            // 底部稍微没入咖啡；叠在别的冰淇淋上时坐在它上面
+            const size = currentScoopSize;
+            const minY = geo.boundingBox.min.y;
+            mesh.scale.setScalar(size);
+            mesh.userData.baseY = LIQUID_Y - minY * size - 0.05 * size;
+            const y = onScoop ? p.y - minY * size * 0.55 : mesh.userData.baseY;
             mesh.position.set(p.x, y, p.z);
             mesh.castShadow = true;
             mesh.receiveShadow = true;
             scene.add(mesh);
             scoops.push(mesh);
             actionDirty = true;
+        }
+
+        // ================= 冰淇淋形状 =================
+        // 每种形状给出"从中心往某个方向走多远到表面"，把同一个球面网格的点挪过去。
+        // 网格、贴图坐标都不变，所以各种工具对所有形状都能用
+
+        // 沿方向 d 往外走，找到隐式曲面 F(p) 从里(<=0)到外(>0)的位置
+        function implicitRadius(d, F, tmax) {
+            const step = 0.03;
+            let t = step;
+            while (t < tmax && F(d.x * t, d.y * t, d.z * t) <= 0) t += step;
+            if (t >= tmax) return tmax;
+            let lo = t - step, hi = t;
+            for (let i = 0; i < 18; i++) {
+                const mid = (lo + hi) / 2;
+                if (F(d.x * mid, d.y * mid, d.z * mid) <= 0) lo = mid; else hi = mid;
+            }
+            return (lo + hi) / 2;
+        }
+
+        // 平面图形鼓成胖胖的立体：正面看是这个形状，侧面是圆润的厚度
+        function puffy(d, radius2D, thickness) {
+            const rho = Math.hypot(d.x, d.y);
+            const r = radius2D(Math.atan2(d.y, d.x));
+            return 1 / Math.hypot(rho / r, d.z / thickness);
+        }
+
+        // 爱心曲线 (x²+y²−1)³ − x²y³ = 0，尖朝下
+        function heartRadius2D(theta) {
+            const c = Math.cos(theta), s = Math.sin(theta);
+            const inside = (r) => { const x = r * c, y = r * s, q = x * x + y * y - 1; return q * q * q - x * x * y * y * y <= 0; };
+            let r = 0.05;
+            while (r < 2 && inside(r)) r += 0.05;
+            let lo = r - 0.05, hi = r;
+            for (let i = 0; i < 18; i++) { const mid = (lo + hi) / 2; if (inside(mid)) lo = mid; else hi = mid; }
+            return 0.85 * (lo + hi) / 2;
+        }
+
+        // 圆角五角星，一个角朝上
+        function starRadius2D(theta) {
+            return 0.6 + 0.48 * Math.pow((Math.cos(5 * (theta - Math.PI / 2)) + 1) / 2, 2);
+        }
+
+        const CAT_EARS = [new THREE.Vector3(-0.55, 0.83, 0.05).normalize(), new THREE.Vector3(0.55, 0.83, 0.05).normalize()];
+
+        const SCOOP_SHAPES = {
+            ball: d => 1 / Math.hypot(d.x / 1.08, d.y / 0.9, d.z / 1.08),
+            flat: d => 1 / Math.hypot(d.x / 1.2, d.y / 0.55, d.z / 1.2),
+            // 圆角方块：超椭球，指数越大越方
+            cube: d => 0.82 / Math.pow(Math.pow(Math.abs(d.x), 6) + Math.pow(Math.abs(d.y), 6) + Math.pow(Math.abs(d.z), 6), 1 / 6),
+            heart: d => puffy(d, heartRadius2D, 0.5),
+            star: d => puffy(d, starRadius2D, 0.45),
+            // 猫头：略扁的球，上面两只平滑隆起的耳朵
+            cat: d => {
+                let r = 1 / Math.hypot(d.x / 1.1, d.y / 0.92, d.z / 1.0);
+                for (const e of CAT_EARS) {
+                    const c = d.x * e.x + d.y * e.y + d.z * e.z;
+                    if (c > 0.88) {
+                        const k = (c - 0.88) / 0.12;
+                        r += 0.62 * Math.pow(k, 1.25);
+                    }
+                }
+                return r;
+            },
+            // 水滴：底部圆、顶上收成一个软软的尖
+            drop: d => implicitRadius(d, (x, y, z) => {
+                const t = (y + 0.85) / 2.1;
+                if (t <= 0 || t >= 1) return 1;
+                return Math.hypot(x, z) - 1.05 * Math.pow(Math.sin(Math.PI * t), 0.7) * Math.pow(1 - t, 0.35);
+            }, 2.2),
+            // 甜筒：一圈圈往上盘、越往上越细，最后收成小尖
+            swirl: d => implicitRadius(d, (x, y, z) => {
+                const t = (y + 0.7) / 2.3;
+                if (t < 0 || t >= 1) return 1;
+                const turn = t * 3.5 * Math.PI * 2 + Math.atan2(z, x);
+                const base = Math.sqrt(Math.min(1, t / 0.08));
+                const r = (1.05 * Math.pow(1 - t, 0.9) + 0.1 * (1 - t) * (0.5 + 0.5 * Math.sin(turn))) * base;
+                return Math.hypot(x, z) - r;
+            }, 2.6)
+        };
+
+        function buildScoopGeometry(shape) {
+            // 球的两极转到左右两侧，正面和顶部画画时不容易变形
+            const geo = new THREE.SphereGeometry(SCOOP_R, 64, 48);
+            geo.rotateZ(Math.PI / 2);
+            const f = SCOOP_SHAPES[shape] || SCOOP_SHAPES.ball;
+            const pos = geo.attributes.position;
+            const d = new THREE.Vector3();
+            for (let v = 0; v < pos.count; v++) {
+                d.set(pos.getX(v), pos.getY(v), pos.getZ(v)).normalize();
+                const t = f(d) * SCOOP_R;
+                pos.setXYZ(v, d.x * t, d.y * t, d.z * t);
+            }
+            computeWeldedNormals(geo);
+            geo.computeBoundingBox();
+            geo.computeBoundingSphere();
+            return geo;
+        }
+
+        // 一颗冰淇淋在世界里大概有多大，捏和压用它判断有没有碰到
+        function scoopReach(m) {
+            return m.geometry.boundingSphere.radius * m.scale.x + 0.1;
+        }
+
+        function setShape(shape, elem) {
+            currentShape = shape;
+            document.querySelectorAll('#shapeBar .shape-btn').forEach(b => b.classList.remove('active'));
+            if (elem) elem.classList.add('active');
+        }
+
+        function setScoopSize(size, elem) {
+            currentScoopSize = size;
+            document.querySelectorAll('#shapeBar .size-btn').forEach(b => b.classList.remove('active'));
+            if (elem) elem.classList.add('active');
         }
 
         // 勺背压平：只作用在按到的冰淇淋球上，用平滑衰减，不产生尖刺
@@ -888,7 +1062,7 @@
             const PUSH = 0.03;  // 向外挤的距离
 
             for (const m of scoops) {
-                if (Math.hypot(m.position.x - curPoint.x, m.position.z - curPoint.z) > SCOOP_R * 1.1 + PR) continue;
+                if (Math.hypot(m.position.x - curPoint.x, m.position.z - curPoint.z) > scoopReach(m) + PR) continue;
 
                 const pl = m.worldToLocal(curPoint.clone());
                 const pos = m.geometry.attributes.position;
@@ -915,7 +1089,7 @@
 
                 if (changed) {
                     pos.needsUpdate = true;
-                    m.geometry.computeVertexNormals();
+                    computeWeldedNormals(m.geometry);
                     m.geometry.computeBoundingSphere();
                 }
             }
@@ -1154,7 +1328,17 @@
                 if (p) {
                     const d = Math.hypot(p.x, p.z);
                     const s = d > 1.6 ? 1.6 / d : 1;
-                    grabbedScoop.position.set(p.x * s, LIQUID_Y + SCOOP_R * 0.82 + 0.5, p.z * s);
+                    grabbedScoop.position.set(p.x * s, grabbedScoop.userData.baseY + 0.5, p.z * s);
+                }
+                return;
+            }
+
+            // 橡皮泥：推是抓住一块跟着手指走；挤、戳、抹是按住时每帧改一点
+            if (currentMode === 'CLAY' && isInteracting) {
+                if (clayMode === 'push') {
+                    if (clayGrab) updateClayGrab();
+                } else if (currentHitPoint && currentHitObject && scoops.includes(currentHitObject)) {
+                    clayBrush(currentHitObject, currentHitPoint, clayMode);
                 }
                 return;
             }
@@ -1168,6 +1352,15 @@
 
             // 画画：杯身外壁或冰淇淋球上都能画，颜色用颜色条里选的
             if (currentMode === 'CUP' && isInteracting && currentHitUV && currentHitObject) {
+                // 印图：选了自己上传的素材时，点一下印一次，拖动时不连续印
+                if (currentStamp) {
+                    const target = currentHitObject;
+                    if (!stampedThisStroke && (target === cupBodyMesh || target === liquidMesh || scoops.includes(target))) {
+                        stampAsset(target, currentHitUV, currentHitPoint);
+                        stampedThisStroke = true;
+                    }
+                    return;
+                }
                 const obj = currentHitObject;
                 // 换了画的物体就重新起笔，避免两个画布之间连线
                 if (obj !== lastPaintObj) lastCanvasPos = null;
@@ -1255,26 +1448,31 @@
         function setMainMode(mode) {
             currentMode = mode;
             grabbedScoop = null;
+            clayGrab = null;
             document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
 
             pitcherGroup.visible = (mode === 'PITCHER');
             stirSpoonGroup.visible = (mode === 'FLATTEN' || mode === 'SPOON');
             penGroup.visible = (mode === 'ETCH');
             document.getElementById('pinchBar').style.display = mode === 'PINCH' ? 'flex' : 'none';
+            document.getElementById('clayBar').style.display = mode === 'CLAY' ? 'flex' : 'none';
+            document.getElementById('shapeBar').style.display = mode === 'ADD' ? 'flex' : 'none';
             document.getElementById('penBar').style.display = (mode === 'ETCH' || mode === 'CUP') ? 'flex' : 'none';
             document.getElementById('decoBar').style.display = mode === 'DECO' ? 'flex' : 'none';
-            const sized = ['PINCH', 'FLATTEN', 'SPOON', 'PITCHER', 'ETCH', 'CUP'].includes(mode);
+            document.getElementById('stampChips').style.display = mode === 'CUP' ? 'contents' : 'none';
+            const sized = ['PINCH', 'CLAY', 'FLATTEN', 'SPOON', 'PITCHER', 'ETCH', 'CUP'].includes(mode);
             document.getElementById('sizeBar').style.display = sized ? 'flex' : 'none';
 
             const pills = {
-                ADD: ['btnToolAdd', '🍨 点一下杯子，放上一颗冰淇淋球（每颗都能换口味）'],
+                ADD: ['btnToolAdd', '🍨 选好形状和大小，点一下杯子放一颗（每颗都能换口味）'],
                 PINCH: ['btnToolPinch', '🤏 捏起来 (下方选：捏出尖角，或挪动冰淇淋球)'],
+                CLAY: ['btnToolClay', '🧸 橡皮泥 (下方选推、挤、戳、抹，按住冰淇淋球揉一揉)'],
                 FLATTEN: ['btnToolFlatten', '🥄 勺背压平 (按住冰淇淋球上方滑动，压成柔软的一层)'],
                 SPOON: ['btnToolSpoon', '🌪️ 旋涡乳化 (在咖啡中搅拌，把冰淇淋与咖啡融匀)'],
                 PITCHER: ['btnToolPitcher', '🥛 金边拉花 (按住不动会鼓起奶泡，移动就画出纹路)'],
                 ETCH: ['btnToolEtch', '🍫 描边彩笔 (下方选颜色，在咖啡液面上画线条)'],
-                DECO: ['btnToolDeco', '🍋 小装饰 (下方选一种，点在冰淇淋或咖啡上放上去)'],
-                CUP: ['btnToolCup', '🎨 画画 (下方选颜色，在杯子外壁或冰淇淋球上画)'],
+                DECO: ['btnToolDeco', '🍋 小装饰 (下方选一种，点在冰淇淋或咖啡上；也能上传自己的图片当贴纸)'],
+                CUP: ['btnToolCup', '🎨 画画 (选颜色画；选自己的图片，点一下印到杯子、冰淇淋或咖啡上)'],
                 ORBIT: ['btnToolOrbit', '🖐️ 转视角 (拖动旋转，Shift+拖动平移；其他模式下右键或双指拖动也能转)']
             };
             const [btnId, text] = pills[mode];
@@ -1285,6 +1483,177 @@
         function setBrushLevel(v) {
             brushLevel = Number(v);
             document.getElementById('sizeVal').innerText = v;
+        }
+
+        function setClayMode(mode, elem) {
+            clayMode = mode;
+            clayGrab = null;
+            document.querySelectorAll('#clayBar .deco-btn').forEach(d => d.classList.remove('active'));
+            if (elem) elem.classList.add('active');
+        }
+
+        // ================= 橡皮泥 =================
+        // 权重：中心为 1，到边缘平滑降到 0，所以推挤戳抹都不会出硬边和尖刺
+        function clayFalloff(d, R) {
+            if (d >= R) return 0;
+            const t = 1 - (d / R) * (d / R);
+            return t * t;
+        }
+
+        // 重新算光照方向，并把接缝、两极上重合的点统一成同一个方向，揉过的地方不会出现折线
+        function computeWeldedNormals(geo) {
+            geo.computeVertexNormals();
+            const { members } = clayNeighbors(geo);
+            const n = geo.attributes.normal;
+            for (const list of members.values()) {
+                if (list.length < 2) continue;
+                let x = 0, y = 0, z = 0;
+                for (const v of list) { x += n.getX(v); y += n.getY(v); z += n.getZ(v); }
+                const len = Math.hypot(x, y, z) || 1;
+                for (const v of list) n.setXYZ(v, x / len, y / len, z / len);
+            }
+            n.needsUpdate = true;
+        }
+
+        function finishClayEdit(mesh) {
+            const geo = mesh.geometry;
+            geo.attributes.position.needsUpdate = true;
+            computeWeldedNormals(geo);
+            geo.computeBoundingSphere();
+        }
+
+        // 球面在接缝和两极有位置重合的重复顶点。抹的时候要把它们当成同一个点，
+        // 否则两边各抹各的，会抹出一条裂缝。这里按位置分组，并算出每组的相邻组
+        function clayNeighbors(geo) {
+            if (geo.userData.clayNb) return geo.userData.clayNb;
+            const pos = geo.attributes.position, idx = geo.index.array;
+            const keyOf = v => Math.round(pos.getX(v) * 1e4) + ',' + Math.round(pos.getY(v) * 1e4) + ',' + Math.round(pos.getZ(v) * 1e4);
+            const repByKey = new Map(), rep = new Int32Array(pos.count), members = new Map();
+            for (let v = 0; v < pos.count; v++) {
+                const k = keyOf(v);
+                if (!repByKey.has(k)) {
+                    repByKey.set(k, v);
+                    members.set(v, []);
+                }
+                rep[v] = repByKey.get(k);
+                members.get(rep[v]).push(v);
+            }
+            const nbSet = new Map();
+            for (const r of members.keys()) nbSet.set(r, new Set());
+            const link = (a, b) => {
+                if (a === b) return;
+                nbSet.get(a).add(b);
+                nbSet.get(b).add(a);
+            };
+            for (let i = 0; i < idx.length; i += 3) {
+                const a = rep[idx[i]], b = rep[idx[i + 1]], c = rep[idx[i + 2]];
+                link(a, b); link(b, c); link(a, c);
+            }
+            const nb = new Map();
+            for (const [r, s] of nbSet) nb.set(r, [...s]);
+            geo.userData.clayNb = { rep, members, nb };
+            return geo.userData.clayNb;
+        }
+
+        // 推：按下时记下范围内的顶点和原位置；拖动时这一块跟着手指平移，越靠中心跟得越多
+        function startClayGrab(mesh, point) {
+            const R = 0.3 + 0.4 * brushScale();
+            const local = mesh.worldToLocal(point.clone());
+            const pos = mesh.geometry.attributes.position;
+            const verts = [], weights = [], orig = [];
+            for (let v = 0; v < pos.count; v++) {
+                const dx = pos.getX(v) - local.x, dy = pos.getY(v) - local.y, dz = pos.getZ(v) - local.z;
+                const w = clayFalloff(Math.sqrt(dx * dx + dy * dy + dz * dz), R);
+                if (w > 0) {
+                    verts.push(v);
+                    weights.push(w);
+                    orig.push(pos.getX(v), pos.getY(v), pos.getZ(v));
+                }
+            }
+            // 手指在一张正对镜头、穿过按下点的平面上移动
+            const normal = camera.getWorldDirection(new THREE.Vector3()).negate();
+            clayGrab = {
+                mesh: mesh,
+                plane: new THREE.Plane().setFromNormalAndCoplanarPoint(normal, point),
+                startLocal: local,
+                maxPull: R * 1.6,
+                verts: verts, weights: weights, orig: orig
+            };
+        }
+
+        function updateClayGrab() {
+            const g = clayGrab;
+            const hitW = raycaster.ray.intersectPlane(g.plane, new THREE.Vector3());
+            if (!hitW) return;
+            const delta = g.mesh.worldToLocal(hitW).sub(g.startLocal);
+            if (delta.length() > g.maxPull) delta.setLength(g.maxPull);  // 拉太远会把表面扯得太薄，这里按范围封顶
+            const pos = g.mesh.geometry.attributes.position;
+            for (let i = 0; i < g.verts.length; i++) {
+                const w = g.weights[i];
+                pos.setXYZ(g.verts[i], g.orig[i * 3] + delta.x * w, g.orig[i * 3 + 1] + delta.y * w, g.orig[i * 3 + 2] + delta.z * w);
+            }
+            finishClayEdit(g.mesh);
+        }
+
+        // 挤 / 戳 / 抹：按住时每帧改一点，松手就停在那里
+        function clayBrush(mesh, point, mode) {
+            const s = brushScale();
+            const R = 0.2 + 0.35 * s;
+            const local = mesh.worldToLocal(point.clone());
+            const pos = mesh.geometry.attributes.position;
+            const near = [];
+            for (let v = 0; v < pos.count; v++) {
+                const dx = pos.getX(v) - local.x, dy = pos.getY(v) - local.y, dz = pos.getZ(v) - local.z;
+                const w = clayFalloff(Math.sqrt(dx * dx + dy * dy + dz * dz), R);
+                if (w > 0) near.push(v, w);
+            }
+            if (!near.length) return;
+
+            if (mode === 'squeeze') {
+                // 挤：往球的中轴收，被挤出来的部分往上鼓
+                const rate = 0.01 + 0.03 * s;
+                for (let i = 0; i < near.length; i += 2) {
+                    const v = near[i], k = rate * near[i + 1];
+                    const x = pos.getX(v), y = pos.getY(v), z = pos.getZ(v);
+                    const rxz = Math.hypot(x, z);
+                    if (rxz < 0.05) continue;
+                    pos.setXYZ(v, x - (x / rxz) * k, y + k * 0.8, z - (z / rxz) * k);
+                }
+            } else if (mode === 'poke') {
+                // 戳：往球心方向按出一个圆圆的小坑，按得越久越深
+                const rate = 0.004 + 0.012 * s;
+                for (let i = 0; i < near.length; i += 2) {
+                    const v = near[i];
+                    const x = pos.getX(v), y = pos.getY(v), z = pos.getZ(v);
+                    const len = Math.hypot(x, y, z);
+                    if (len < 0.2) continue;  // 不戳穿到中心
+                    const k = rate * near[i + 1] / len;
+                    pos.setXYZ(v, x - x * k, y - y * k, z - z * k);
+                }
+            } else {
+                // 抹：每个点往相邻点的平均位置靠，把疙瘩和棱角抹平
+                const { rep, members, nb } = clayNeighbors(mesh.geometry);
+                const rate = 0.15 + 0.35 * s;
+                const seen = new Set(), targets = [];
+                for (let i = 0; i < near.length; i += 2) {
+                    const r = rep[near[i]];
+                    if (seen.has(r)) continue;
+                    seen.add(r);
+                    const list = nb.get(r);
+                    if (!list.length) continue;
+                    let ax = 0, ay = 0, az = 0;
+                    for (const u of list) { ax += pos.getX(u); ay += pos.getY(u); az += pos.getZ(u); }
+                    targets.push(r, near[i + 1], ax / list.length, ay / list.length, az / list.length);
+                }
+                for (let i = 0; i < targets.length; i += 5) {
+                    const r = targets[i], k = rate * targets[i + 1];
+                    const nx = pos.getX(r) + (targets[i + 2] - pos.getX(r)) * k;
+                    const ny = pos.getY(r) + (targets[i + 3] - pos.getY(r)) * k;
+                    const nz = pos.getZ(r) + (targets[i + 4] - pos.getZ(r)) * k;
+                    for (const m of members.get(r)) pos.setXYZ(m, nx, ny, nz);
+                }
+            }
+            finishClayEdit(mesh);
         }
 
         function setPinchMode(mode, elem) {
@@ -1302,7 +1671,7 @@
             const LIFT = 0.3;  // 尖角比指针高出的距离
 
             for (const m of scoops) {
-                if (m.position.distanceTo(curPoint) > SCOOP_R * 1.4) continue;
+                if (m.position.distanceTo(curPoint) > scoopReach(m)) continue;
 
                 const pl = m.worldToLocal(curPoint.clone());
                 const target = pl.y + LIFT;
@@ -1324,7 +1693,7 @@
 
                 if (changed) {
                     pos.needsUpdate = true;
-                    m.geometry.computeVertexNormals();
+                    computeWeldedNormals(m.geometry);
                     m.geometry.computeBoundingSphere();
                 }
             }
@@ -1421,13 +1790,14 @@
 
         function setPenColor(hex, elem) {
             penColor = hex;
+            currentStamp = null;
             document.querySelectorAll('.pen-dot').forEach(d => d.classList.remove('active'));
             if (elem) elem.classList.add('active');
         }
 
         function setDecoType(type, elem) {
             currentDeco = type;
-            document.querySelectorAll('.deco-btn').forEach(d => d.classList.remove('active'));
+            document.querySelectorAll('#decoBar .deco-btn').forEach(d => d.classList.remove('active'));
             if (elem) elem.classList.add('active');
         }
 
@@ -1439,6 +1809,7 @@
 
         // 小装饰：用几何体拼出来，每一种都有自己的颜色
         function buildDecoration(type) {
+            if (type.startsWith('asset:')) return buildAssetSticker(assets.find(a => a.id === type.slice(6)));
             const g = new THREE.Group();
             const part = (geo, color, x, y, z) => {
                 const m = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({
@@ -1501,11 +1872,200 @@
             return g;
         }
 
+        // ================= 自己上传的素材 =================
+        function pickAsset() {
+            if (assets.length >= ASSET_MAX) {
+                setBubble('素材最多放 ' + ASSET_MAX + ' 张啦~');
+                return;
+            }
+            document.getElementById('assetInput').click();
+        }
+
+        // 读图：优先 createImageBitmap，不行再用 Image；统一缩到最长边 512，省内存也省性能
+        async function decodeImage(file) {
+            let src;
+            try {
+                src = await createImageBitmap(file);
+            } catch (e) {
+                src = await new Promise((resolve, reject) => {
+                    const url = URL.createObjectURL(file);
+                    const im = new Image();
+                    im.onload = () => { URL.revokeObjectURL(url); resolve(im); };
+                    im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode failed')); };
+                    im.src = url;
+                });
+            }
+            const w = src.width, h = src.height;
+            if (!w || !h) throw new Error('empty image');
+            const s = Math.min(1, 512 / Math.max(w, h));
+            const c = document.createElement('canvas');
+            c.width = Math.max(1, Math.round(w * s));
+            c.height = Math.max(1, Math.round(h * s));
+            c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+            return c;
+        }
+
+        function makeThumb(asset, size) {
+            const t = document.createElement('canvas');
+            t.width = t.height = size * 2;
+            const ctx = t.getContext('2d');
+            const s = Math.min(t.width / asset.canvas.width, t.height / asset.canvas.height);
+            const w = asset.canvas.width * s, h = asset.canvas.height * s;
+            ctx.drawImage(asset.canvas, (t.width - w) / 2, (t.height - h) / 2, w, h);
+            return t;
+        }
+
+        // 每张素材在两处出现：小装饰里当贴纸，画画里当印章
+        function addAssetButtons(asset) {
+            const decoBtn = document.createElement('button');
+            decoBtn.className = 'deco-btn asset-btn';
+            decoBtn.title = asset.name;
+            const dt = makeThumb(asset, 24);
+            dt.className = 'asset-thumb';
+            decoBtn.appendChild(dt);
+            decoBtn.addEventListener('click', () => setDecoType('asset:' + asset.id, decoBtn));
+            const upload = document.querySelector('#decoBar .deco-upload');
+            upload.parentNode.insertBefore(decoBtn, upload);
+
+            const chip = document.createElement('button');
+            chip.className = 'pen-dot asset-chip';
+            chip.title = '印章：' + asset.name;
+            chip.appendChild(makeThumb(asset, 24));
+            chip.addEventListener('click', () => {
+                currentStamp = asset;
+                document.querySelectorAll('.pen-dot').forEach(d => d.classList.remove('active'));
+                chip.classList.add('active');
+            });
+            document.getElementById('stampChips').appendChild(chip);
+            return { decoBtn, chip };
+        }
+
+        document.getElementById('assetInput').addEventListener('change', async (e) => {
+            const files = [...e.target.files];
+            e.target.value = '';  // 允许再次选择同一张
+            let added = null, failed = 0;
+            for (const file of files) {
+                if (assets.length >= ASSET_MAX) break;
+                try {
+                    const canvas = await decodeImage(file);
+                    const asset = { id: String(Date.now()) + assets.length, name: file.name || '我的图片', canvas: canvas, tex: null };
+                    assets.push(asset);
+                    added = { asset, ...addAssetButtons(asset) };
+                } catch (err) {
+                    console.error(err);
+                    failed++;
+                }
+            }
+            if (added) {
+                // 刚传的那张直接选中：在画画里就是印章，否则当贴纸
+                if (currentMode === 'CUP') added.chip.click();
+                else setDecoType('asset:' + added.asset.id, added.decoBtn);
+                setBubble(currentMode === 'CUP'
+                    ? '图片已经变成印章啦，点一下杯子、冰淇淋或咖啡就能印上去~'
+                    : '图片已经变成贴纸啦，点在冰淇淋或咖啡上就能贴上去~');
+            }
+            if (failed) setBubble('有 ' + failed + ' 张图片打不开，换成 PNG 或 JPG 再试试~');
+        });
+
+        // 贴纸：一张透明背景也能用的薄片，带透明通道的 PNG 会是抠好的形状
+        function buildAssetSticker(asset) {
+            const g = new THREE.Group();
+            if (!asset) return g;
+            if (!asset.tex) {
+                asset.tex = new THREE.CanvasTexture(asset.canvas);
+                asset.tex.encoding = THREE.sRGBEncoding;
+                asset.tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+            }
+            const aspect = asset.canvas.width / asset.canvas.height;
+            let h = 0.8, w = h * aspect;
+            if (w > 1.2) { w = 1.2; h = w / aspect; }
+            const geo = new THREE.PlaneGeometry(w, h);
+            geo.rotateX(-Math.PI / 2);
+            const mat = new THREE.MeshStandardMaterial({
+                map: asset.tex,
+                transparent: true,
+                alphaTest: 0.05,
+                roughness: 0.5,
+                side: THREE.DoubleSide
+            });
+            const m = new THREE.Mesh(geo, mat);
+            m.position.y = 0.01;
+            g.add(m);
+            return g;
+        }
+
+        // 让贴纸贴着命中的表面，并且图片"上方"朝远离镜头的方向，从镜头看是正的
+        function orientSticker(g, hit) {
+            const n = hit.face
+                ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
+                : new THREE.Vector3(0, 1, 0);
+            const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
+            const away = hit.point.clone().sub(camera.position);
+            away.addScaledVector(n, -away.dot(n));
+            if (away.lengthSq() > 1e-6) {
+                away.normalize();
+                const top = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
+                const angle = Math.atan2(top.clone().cross(away).dot(n), top.dot(away));
+                q.premultiply(new THREE.Quaternion().setFromAxisAngle(n, angle));
+            }
+            g.quaternion.copy(q);
+            g.position.copy(hit.point).addScaledVector(n, 0.02);
+        }
+
+        // 印章：把素材画进杯身 / 冰淇淋球 / 咖啡的画布。按真实尺寸换算像素，抵消各自贴图的拉伸
+        function stampAsset(obj, uv, point) {
+            const a = currentStamp;
+            const aspect = a.canvas.width / a.canvas.height;
+            const worldH = 0.3 + 1.0 * brushScale();   // 印出来的高度（世界单位），跟幅度走
+            const worldW = worldH * aspect;
+            let ctx, W, H, tex, x, y, drawW, drawH, rotate = 0, wrap = true;
+
+            if (obj === cupBodyMesh) {
+                if (pendingUndo && !pendingUndo.cup) pendingUndo.cup = cloneCanvas(cupCanvas);
+                ctx = cupCtx; W = cupCanvas.width; H = cupCanvas.height; tex = cupTexture;
+                x = uv.x * W; y = (1 - uv.y) * H;
+                const r = Math.max(Math.hypot(point.x, point.z), 0.5);
+                drawW = worldW * W / (2 * Math.PI * r);
+                drawH = worldH * H / cupProfileLen;
+            } else if (obj === liquidMesh) {
+                snapshotLiquid();
+                ctx = liquidCtx; W = liquidCanvas.width; H = liquidCanvas.height; tex = liquidTexture;
+                const c = liquidCoordsFromHit(point);
+                x = c.x; y = c.y;
+                drawW = worldW * W / 3.9;
+                drawH = worldH * H / 3.9;
+                wrap = false;
+            } else {
+                const ud = obj.userData;
+                if (pendingUndo && !pendingUndo.ballCanvases.has(obj)) pendingUndo.ballCanvases.set(obj, cloneCanvas(ud.canvas));
+                ctx = ud.ctx; W = ud.canvas.width; H = ud.canvas.height; tex = ud.tex;
+                x = uv.x * W; y = (1 - uv.y) * H;
+                // 球的两极转到了左右两侧：画布横向是世界的上下，纵向是世界的左右，所以图片要转 90°
+                const sinT = Math.max(Math.sin((y / H) * Math.PI), 0.15);
+                const rb = SCOOP_R * obj.scale.x;
+                drawW = worldW * H / (Math.PI * rb);
+                drawH = worldH * W / (2 * Math.PI * rb * sinT);
+                rotate = Math.PI / 2;
+            }
+
+            const extentX = rotate ? drawH / 2 : drawW / 2;
+            for (const ox of wrap ? [0, -W, W] : [0]) {
+                if (ox !== 0 && (x + ox + extentX < 0 || x + ox - extentX > W)) continue;
+                ctx.save();
+                ctx.translate(x + ox, y);
+                ctx.rotate(rotate);
+                ctx.drawImage(a.canvas, -drawW / 2, -drawH / 2, drawW, drawH);
+                ctx.restore();
+            }
+            tex.needsUpdate = true;
+        }
+
         function placeDecoration(hit) {
             if (!hit.object || (hit.object !== liquidMesh && !scoops.includes(hit.object))) return;
             const g = buildDecoration(currentDeco);
             g.position.set(hit.point.x, hit.point.y + 0.03, hit.point.z);
             g.rotation.y = Math.random() * Math.PI * 2;
+            if (currentDeco.startsWith('asset:')) orientSticker(g, hit);
             scene.add(g);
             decos.push(g);
             actionDirty = true;
@@ -1549,7 +2109,7 @@
                 const attr = m.geometry.attributes.position;
                 attr.array.set(s.scoopGeo[i]);
                 attr.needsUpdate = true;
-                m.geometry.computeVertexNormals();
+                computeWeldedNormals(m.geometry);
                 m.geometry.computeBoundingSphere();
             });
 
@@ -1640,7 +2200,7 @@
                     if (pendingUndo && actionDirty) pushUndo(pendingUndo);
                     pendingUndo = null;
                     if (grabbedScoop) {
-                        grabbedScoop.position.y = LIQUID_Y + SCOOP_R * 0.82;
+                        grabbedScoop.position.y = grabbedScoop.userData.baseY;
                         grabbedScoop = null;
                     }
                     isInteracting = false;
@@ -1664,6 +2224,7 @@
                 actionStartTime = performance.now();
                 pendingUndo = currentMode === 'ORBIT' ? null : captureState();
                 lastPaintObj = null;
+                stampedThisStroke = false;
                 actionDirty = false;
                 lastCanvasPos = null;
                 penPts = [];
@@ -1685,8 +2246,12 @@
                 }
                 // 小装饰：点一下放上去
                 if (currentMode === 'DECO' && currentHitPoint) {
-                    placeDecoration({ point: currentHitPoint, object: currentHitObject });
+                    placeDecoration({ point: currentHitPoint, object: currentHitObject, face: currentHitFace });
                     isInteracting = false;
+                }
+                // 橡皮泥（推）：按住冰淇淋球，记下抓住的那一块
+                if (currentMode === 'CLAY' && clayMode === 'push' && currentHitObject && scoops.includes(currentHitObject)) {
+                    startClayGrab(currentHitObject, currentHitPoint);
                 }
                 // 画画 / 彩笔：按下就落第一笔
                 if (currentMode === 'CUP' || currentMode === 'ETCH') updateContinuousInteraction();
@@ -1722,12 +2287,13 @@
                     if (currentMode === 'CUP' || currentMode === 'ETCH') updateContinuousInteraction();
                 }
 
-                if (e.touches && e.cancelable && box.contains(e.target)) e.preventDefault();
+                if (e.touches && e.cancelable && e.target instanceof Node && box.contains(e.target)) e.preventDefault();
             }
 
             function handleEnd() {
                 isInteracting = false;
                 pinchStartDist = 0;
+                clayGrab = null;
                 orbitDrag = false;
                 panDrag = false;
                 lastCentroid = null;
@@ -1736,7 +2302,7 @@
                     pendingUndo = null;
                 }
                 if (grabbedScoop) {
-                    grabbedScoop.position.y = LIQUID_Y + SCOOP_R * 0.82;
+                    grabbedScoop.position.y = grabbedScoop.userData.baseY;
                     grabbedScoop = null;
                 }
                 lastCanvasPos = null;
@@ -1772,6 +2338,7 @@
                 currentHitPoint = hits[0].point;
                 currentHitObject = hits[0].object;
                 currentHitUV = hits[0].uv || null;
+                currentHitFace = hits[0].face || null;
 
                 if (currentMode === 'PITCHER') {
                     pitcherGroup.position.set(currentHitPoint.x, currentHitPoint.y + 1.6, currentHitPoint.z + 0.35);
@@ -1784,6 +2351,7 @@
                 currentHitPoint = null;
                 currentHitObject = null;
                 currentHitUV = null;
+                currentHitFace = null;
             }
         }
 
