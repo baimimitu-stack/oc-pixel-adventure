@@ -1,0 +1,588 @@
+/* 冰淇淋拉花工坊 · 布局
+   画布铺满整个视口（含安全区），可读内容与可点控件留在 --safe-* 之内。
+   每个边只由一个层负责内边距：顶部 = .app-shell，底部 = .bottom-dock。
+   原则：上下两条浮层都尽量矮，把中间留给杯子。 */
+
+:root {
+    /* 兼容宿主顶部横幅：--eazo-handoff-top 由宿主横幅脚本写入，无横幅时为 0 */
+    --safe-top: max(env(safe-area-inset-top, 0px), var(--eazo-safe-area-top, 0px), var(--eazo-handoff-top, 0px));
+    --safe-right: max(env(safe-area-inset-right, 0px), var(--eazo-safe-area-right, 0px));
+    --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--eazo-safe-area-bottom, 0px));
+    --safe-left: max(env(safe-area-inset-left, 0px), var(--eazo-safe-area-left, 0px));
+
+    --pink: #ff4d6d;
+    --pink-deep: #c9184a;
+    --pink-soft: #ffb3c1;
+    --pink-pale: #fff0f3;
+    --panel: rgba(255, 255, 255, 0.95);
+
+    --gap: 6px;
+    --edge: 10px;
+    --dock-max: 1180px;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: fixed;
+    inset: 0;
+    background: #faf0f2;
+    color: #444;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+    overscroll-behavior: none;
+}
+
+/* 3D 画布：edge-to-edge */
+#webgl-box {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    touch-action: none;
+}
+#webgl-box canvas { display: block; width: 100%; height: 100%; }
+
+/* 应用外壳：只提供安全的上下留白，内部不限制画布 */
+.app-shell {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bottom);
+    pointer-events: none;
+}
+
+/* ============ 顶部 ============ */
+/* 手机：第一行 = 口味色条 + 按钮；第二行 = 一行模式提示（点一下展开） */
+.top-nav {
+    position: relative;
+    flex: none;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--gap);
+    padding: 8px var(--edge) 0;
+    padding-left: calc(var(--edge) + var(--safe-left));
+    padding-right: calc(var(--edge) + var(--safe-right));
+    z-index: 20;
+    pointer-events: none;
+}
+
+.mode-pill {
+    order: 3;
+    flex: 1 1 100%;
+    min-width: 0;
+    background: var(--panel);
+    border: 1.5px solid #ff9db2;
+    border-radius: 16px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 1.35;
+    color: #d90429;
+    box-shadow: 0 3px 10px rgba(255, 117, 143, 0.16);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    pointer-events: auto;
+}
+.mode-pill.expanded { white-space: normal; }
+
+.color-swatch-bar {
+    order: 1;
+    flex: 1 1 0;          /* 先让按钮排完，色条用剩下的宽度（放不下就横着滑），不会挤成两行 */
+    min-width: 0;
+    max-width: max-content;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1.5px solid var(--pink-soft);
+    border-radius: 18px;
+    padding: 4px 8px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
+    pointer-events: auto;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.color-swatch-bar::-webkit-scrollbar { display: none; }
+.color-swatch-bar > .sub-label { display: none; }
+
+.color-dot {
+    width: 20px;
+    height: 20px;
+    flex: none;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    transition: transform 0.15s;
+}
+.color-dot.active { transform: scale(1.2); border-color: var(--pink); }
+
+.top-btn-group {
+    order: 2;
+    flex: none;
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+    pointer-events: auto;
+}
+
+.icon-btn {
+    width: 34px;
+    height: 34px;
+    flex: none;
+    border-radius: 50%;
+    background: #fff;
+    border: 1.5px solid var(--pink-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    line-height: 1;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    padding: 0;
+    color: inherit;
+    text-decoration: none;
+}
+.icon-btn:active { transform: scale(0.94); }
+
+/* ============ 中部舞台 ============ */
+.stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: var(--gap) var(--edge) 0;
+    padding-left: calc(var(--edge) + var(--safe-left));
+    padding-right: calc(var(--edge) + var(--safe-right));
+    pointer-events: none;
+}
+
+.hud-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    max-width: calc(100% - 46px);   /* 右侧留给缩放按钮 */
+    pointer-events: none;
+}
+
+/* 幅度 / 角度滑条 */
+.size-bar {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1.5px solid var(--pink-soft);
+    border-radius: 16px;
+    padding: 3px 10px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
+    pointer-events: auto;
+    max-width: 100%;
+}
+.size-bar input { width: 96px; accent-color: var(--pink); }
+.angle-bar input { width: 72px; }
+
+.sub-label {
+    font-size: 11px;
+    font-weight: bold;
+    color: #ff6584;
+    white-space: nowrap;
+}
+
+/* 女仆气泡 */
+.maid-bubble {
+    display: none;
+    flex: 1 1 100%;
+    background: var(--panel);
+    border: 1.5px solid var(--pink-soft);
+    border-radius: 14px;
+    padding: 8px 12px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #444;
+    max-width: min(300px, 100%);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+    pointer-events: auto;
+}
+
+/* ============ 弹出面板 ============ */
+.cam-preset-pop,
+.color-palette-pop,
+.lang-pop {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: calc(var(--edge) + var(--safe-right));
+    background: rgba(255, 255, 255, 0.97);
+    border: 2px solid var(--pink-soft);
+    border-radius: 14px;
+    padding: 8px;
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 25;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
+    max-width: calc(100% - 24px);
+    pointer-events: auto;
+}
+.lang-pop.open { display: flex; }
+
+.cam-btn {
+    background: var(--pink-pale);
+    border: 1px solid #ffd1dc;
+    border-radius: 9px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--pink-deep);
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+}
+.cam-btn.active {
+    background: var(--pink);
+    border-color: var(--pink);
+    color: #fff;
+}
+
+.color-opt {
+    border: none;
+    padding: 8px 12px;
+    border-radius: 9px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+}
+
+/* 缩放按钮：贴右边，竖着放在舞台中间 */
+.zoom-ctrl {
+    position: absolute;
+    right: calc(var(--edge) + var(--safe-right));
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 20;
+    pointer-events: auto;
+}
+.zoom-ctrl .icon-btn { width: 34px; height: 34px; font-size: 14px; opacity: 0.92; }
+
+/* ============ 底部工具坞 ============ */
+.bottom-dock {
+    flex: none;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--gap);
+    width: 100%;
+    max-width: var(--dock-max);
+    margin: 0 auto;
+    padding: var(--gap) 8px 6px;
+    padding-left: calc(8px + var(--safe-left));
+    padding-right: calc(8px + var(--safe-right));
+    pointer-events: none;
+}
+.bottom-dock > * {
+    width: 100%;
+    pointer-events: auto;
+}
+
+.dock-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+/* 没有子工具条时不占位置（老浏览器不认 :has，只是多留一点空隙） */
+.dock-bars:not(:has(.sub-bar[style*="flex"])) { display: none; }
+
+/* 子工具条：手机上只占一行，横着滑 */
+.sub-bar {
+    display: none;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.97);
+    border: 1.5px solid var(--pink-soft);
+    border-radius: 16px;
+    padding: 5px 8px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+}
+.sub-bar::-webkit-scrollbar { display: none; }
+
+.pen-dot {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.15s;
+}
+.pen-dot.active { transform: scale(1.2); border-color: var(--pink); }
+
+.deco-btn {
+    flex: none;
+    border: 1.5px solid #ffd1dc;
+    background: var(--pink-pale);
+    color: var(--pink-deep);
+    border-radius: 14px;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-weight: bold;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.deco-btn.active { background: var(--pink); color: #fff; border-color: var(--pink); }
+
+.deco-upload { background: #fff; border-style: dashed; }
+.deco-btn.asset-btn { padding: 3px 6px; display: inline-flex; align-items: center; }
+.asset-thumb { width: 24px; height: 24px; border-radius: 6px; display: block; }
+.stamp-chips { display: contents; }
+.pen-dot.asset-chip { border-radius: 7px; overflow: hidden; background: #fff; }
+.pen-dot.asset-chip canvas { width: 100%; height: 100%; display: block; }
+
+/* 功能模式切换：手机两行，每行 6 个 */
+.tool-switch {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 3px;
+    background: rgba(255, 255, 255, 0.97);
+    border: 1.5px solid var(--pink-soft);
+    border-radius: 16px;
+    padding: 4px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+}
+.tool-btn {
+    height: 40px;
+    min-width: 0;
+    border: none;
+    border-radius: 12px;
+    background: transparent;
+    color: #555;
+    font-family: inherit;
+    font-size: 10px;
+    font-weight: bold;
+    line-height: 1.1;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    padding: 0 2px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+.tool-btn .tb-ico { font-size: 15px; line-height: 1; }
+.tool-btn.active {
+    background: var(--pink);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(255, 77, 109, 0.4);
+}
+
+/* 底部操作组 */
+.action-row {
+    display: flex;
+    gap: 6px;
+}
+.act-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 38px;
+    border-radius: 19px;
+    border: none;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 8px;
+}
+.btn-undo { background: var(--pink-pale); color: var(--pink-deep); border: 1.5px solid var(--pink-soft); }
+.btn-reset { background: #fff; color: #555; border: 1.5px solid #ddd; }
+.btn-spell { background: linear-gradient(135deg, #ff4d6d, #c9184a); color: #fff; }
+
+/* ============ 雕琢台面板（放在工具坞里，和杯子不重叠） ============ */
+.sculpt-sheet {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    padding: 6px 8px;
+    background: rgba(255, 255, 255, 0.97);
+    border: 1.5px solid var(--pink-soft);
+    border-radius: 16px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
+}
+.sculpt-sheet.open { display: flex; }
+
+/* 雕琢台打开时：底部的子工具条和“撤回/清空/魔法”收起（撤回在面板里），把画面让给杯子和转台 */
+body.sculpt-on .dock-bars,
+body.sculpt-on .action-row { display: none; }
+
+.sheet-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 5px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    overscroll-behavior: contain;
+}
+.sheet-row::-webkit-scrollbar { display: none; }
+.sculpt-sheet .deco-btn { height: 28px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; }
+.sculpt-sheet .slot-tab {
+    background: #fff;
+    color: var(--pink-deep);
+    border: 1.5px solid #ffd1dc;
+    border-radius: 12px;
+}
+.sculpt-sheet .slot-tab.on {
+    background: var(--pink-deep);
+    color: #fff;
+    border-color: var(--pink-deep);
+}
+.sculpt-sheet .look-group { display: none; }
+.sculpt-sheet .look-group.active { display: flex; }
+.sculpt-sheet .look-btn.on {
+    background: var(--pink);
+    color: #fff;
+    border-color: var(--pink);
+    box-shadow: 0 2px 8px rgba(255, 117, 143, 0.32);
+}
+.sheet-row input[type="range"] {
+    flex: 1 1 70px;
+    min-width: 56px;
+    max-width: 140px;
+    accent-color: var(--pink);
+}
+.sheet-sliders .slider-val { min-width: 30px; text-align: right; }
+.sculpt-sheet .look-group[data-group="clay"] input[type="range"] { min-width: 64px; }
+.sheet-actions .act-btn {
+    height: 34px;
+    font-size: 11px;
+    border-radius: 17px;
+    padding: 0 8px;
+    flex: 1 1 0;
+}
+.sheet-actions .act-btn:first-child { flex: 1.5 1 0; }
+
+/* 爱心特效 */
+.sparkle-heart {
+    position: absolute;
+    font-size: 24px;
+    pointer-events: none;
+    animation: floatUpAnim 1.2s ease-out forwards;
+    z-index: 99;
+}
+@keyframes floatUpAnim {
+    0% { transform: translateY(0) scale(0.5); opacity: 1; }
+    100% { transform: translateY(-90px) scale(1.4); opacity: 0; }
+}
+
+/* ============ 窄屏手机（≤ 360px） ============ */
+@media (max-width: 360px) {
+    :root { --edge: 8px; }
+    .icon-btn { width: 32px; height: 32px; font-size: 14px; }
+    .top-btn-group { gap: 4px; }
+    .color-dot { width: 19px; height: 19px; }
+    .color-swatch-bar { gap: 5px; padding: 4px 6px; }
+    .tool-btn { font-size: 9px; }
+    .act-btn { font-size: 11px; }
+    .sheet-actions .act-btn { font-size: 10px; padding: 0 5px; }
+}
+
+/* ============ 平板与桌面宽屏（≥ 820px）：顶部一行排完，工具一行 11 个 ============ */
+@media (min-width: 820px) {
+    :root { --edge: 16px; --gap: 8px; }
+    .top-nav {
+        flex-wrap: nowrap;
+        max-width: var(--dock-max);
+        width: 100%;
+        margin: 0 auto;
+        padding-top: 12px;
+    }
+    .mode-pill { order: 1; flex: 1 1 auto; font-size: 13px; padding: 9px 16px; border-radius: 20px; }
+    .color-swatch-bar { order: 2; flex: none; padding: 6px 12px; gap: 8px; }
+    .color-swatch-bar > .sub-label { display: inline; }
+    .color-dot { width: 24px; height: 24px; }
+    .top-btn-group { order: 3; margin-left: 0; gap: 6px; }
+    .icon-btn { width: 42px; height: 42px; font-size: 18px; }
+    .stage { max-width: var(--dock-max); width: 100%; margin: 0 auto; }
+    .maid-bubble { max-width: 420px; font-size: 13px; }
+    .zoom-ctrl .icon-btn { width: 40px; height: 40px; font-size: 16px; }
+
+    .bottom-dock { padding: 8px 16px 12px; padding-left: calc(16px + var(--safe-left)); padding-right: calc(16px + var(--safe-right)); }
+    .sub-bar { flex-wrap: wrap; overflow: visible; padding: 6px 10px; }
+    .tool-switch { grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 4px; padding: 5px; }
+    .tool-btn { height: 42px; flex-direction: row; gap: 5px; font-size: 12px; }
+    .action-row { justify-content: center; gap: 12px; }
+    .act-btn { flex: 0 1 220px; height: 40px; font-size: 13px; }
+
+    /* 雕琢台面板：两列排，左边页签 + 选项，右边滑条 + 按钮 */
+    .sculpt-sheet {
+        display: none;
+        grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+        grid-auto-flow: row dense;
+        column-gap: 14px;
+        row-gap: 6px;
+        padding: 8px 12px;
+    }
+    .sculpt-sheet.open { display: grid; }
+    .sculpt-sheet .slot-tabs,
+    .sculpt-sheet .look-group { grid-column: 1; }
+    .sculpt-sheet .sheet-sliders,
+    .sculpt-sheet .sheet-actions { grid-column: 2; }
+    .sculpt-sheet .sheet-row { flex-wrap: wrap; overflow: visible; }
+    .sheet-actions .act-btn { font-size: 12px; flex: 1 1 auto; }
+    .sheet-actions .act-btn:first-child { flex: 1.3 1 auto; }
+}
+
+/* ============ 横屏 / 矮屏（手机横放、小窗口） ============ */
+@media (max-height: 520px) and (orientation: landscape) {
+    .top-nav { flex-wrap: nowrap; padding-top: 4px; }
+    .mode-pill { order: 1; flex: 1 1 auto; font-size: 11px; padding: 5px 10px; }
+    .color-swatch-bar { order: 2; flex: none; }
+    .top-btn-group { order: 3; margin-left: 0; }
+    .icon-btn { width: 32px; height: 32px; font-size: 14px; }
+    .stage { padding-top: 4px; }
+    .maid-bubble { font-size: 11px; max-width: 340px; }
+    .bottom-dock { gap: 4px; padding-top: 4px; padding-bottom: 4px; }
+    .tool-switch { grid-template-columns: repeat(11, minmax(0, 1fr)); }
+    .tool-btn { height: 32px; flex-direction: row; gap: 3px; font-size: 10px; }
+    .tool-btn .tb-ico { font-size: 13px; }
+    .act-btn { height: 32px; font-size: 11px; }
+    .sculpt-sheet { gap: 4px; padding: 4px 8px; }
+    .sculpt-sheet .deco-btn { height: 26px; font-size: 11px; }
+    .sheet-actions .act-btn { height: 30px; }
+    .zoom-ctrl .icon-btn { width: 30px; height: 30px; }
+}
