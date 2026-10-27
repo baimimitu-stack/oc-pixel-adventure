@@ -12,6 +12,14 @@ export interface GameEntry {
 /** 游戏盒子收录的全部游戏，以后加新游戏就往这个数组里追加一项 */
 export const GAMES: GameEntry[] = [
   {
+    id: "nunu-studio",
+    path: "/games/nunu-studio/index.html",
+    title: "努努制作台",
+    tagline: "微调体型、画上表情、设计刘海，导出自己的布偶参考纸样",
+    cover: "/games/nunu-studio/cover.svg",
+    tags: ["布偶设计", "自由画脸", "纸样导出"],
+  },
+  {
     id: "canteen",
     path: "/games/canteen/index.html",
     title: "今日食堂",
