@@ -12,6 +12,14 @@ export interface GameEntry {
 /** 游戏盒子收录的全部游戏，以后加新游戏就往这个数组里追加一项 */
 export const GAMES: GameEntry[] = [
   {
+    id: "merch-studio",
+    path: "/games/merch-studio/index.html",
+    title: "周边制作台",
+    tagline: "选吧唧、立牌、明信片，摆图层、直接画，看 3D，导出刀线和生产文件",
+    cover: "/games/merch-studio/cover.svg",
+    tags: ["周边设计", "3D预览", "生产文件"],
+  },
+  {
     id: "nunu-studio",
     path: "/games/nunu-studio/index.html",
     title: "努努制作台",
