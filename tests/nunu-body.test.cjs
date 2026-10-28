@@ -11,15 +11,16 @@ const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg || ''}
 const make = (over) => { const t = B.generate(over); return { t, d: C.makeDoc(t) }; };
 const ranges = (m) => { const r = { x: [Infinity, -Infinity], y: [Infinity, -Infinity], z: [Infinity, -Infinity] }; for (let i = 0; i < m.pos.length; i += 3) for (const [j, k] of [[0, 'x'], [1, 'y'], [2, 'z']]) { r[k][0] = Math.min(r[k][0], m.pos[i + j]); r[k][1] = Math.max(r[k][1], m.pos[i + j]); } return r; };
 
-test('默认体子：脸片 + 后脑两半 + 四片耳朵 + 四片手臂 + 身体前后，一共 13 片，用途都对得上，都有 3D 袋子', () => {
+test('默认体子：脸片 + 后脑两半 + 四片耳朵 + 四片手臂 + 身体前后 + 四段围条，一共 17 片，用途都对得上，除围条外都有 3D 袋子', () => {
   const { t, d } = make();
-  assert.equal(d.pieces.length, 13);
+  assert.equal(d.pieces.length, 17);
   assert.ok(d.flat && t.custom);
   const roles = d.pieces.map((p) => p.role).sort().join();
-  assert.equal(roles, ['armLB', 'armLF', 'armRB', 'armRF', 'bodyBack', 'bodyFront', 'earLB', 'earLF', 'earRB', 'earRF', 'faceFlat', 'headBackL', 'headBackR'].sort().join());
+  assert.equal(roles, ['armLB', 'armLF', 'armRB', 'armRF', 'bodyBack', 'bodyFront', 'earLB', 'earLF', 'earRB', 'earRF', 'faceFlat', 'gussetBody', 'gussetBody', 'gussetHead', 'gussetHead', 'headBackL', 'headBackR'].sort().join());
   for (const p of d.pieces) {
     assert.ok(p.area > 300, `${p.id} 面积 ${p.area}`);
     const m = C.pillowMesh(p, d);
+    if (p.role.startsWith('gusset')) { assert.equal(m, null, `${p.id} 围条本身不上 3D`); continue; }
     assert.ok(m && m.pos.length > 60 && m.idx.length > 30, `${p.id} 有 3D 网格`);
   }
   assert.ok(C.isFace(d.byId.face) && !C.isFace(d.byId.bodyF));
@@ -54,7 +55,7 @@ test('参数管用：头高、身体宽、耳朵大小、手臂方式都会改�
   assert.ok(make({ bodyW: 240 }).d.byId.bodyF.box.w > a.byId.bodyF.box.w + 50);
   assert.ok(make({ earSize: 160 }).d.byId.earLF.box.h > a.byId.earLF.box.h * 1.3);
   const g = make({ arms: 'integrated' }).d;
-  assert.equal(g.pieces.length, 9);
+  assert.equal(g.pieces.length, 13);
   assert.ok(!g.byId.armLF);
   assert.ok(g.byId.bodyF.box.w > a.byId.bodyF.box.w + 150, '手身一体的身体带着手臂，更宽');
   // 方头比圆头更方：同样的外接框，面积更大
@@ -124,3 +125,51 @@ test('手臂（分开做）：左边那一列贴在画面右边的身体侧边�
   assert.ok(gb.x[1] - gb.x[0] > body.x[1] - body.x[0] + 0.8, '手身一体的身体更宽');
 });
 
+
+test('围条：头和身体各一条，长度正好等于轮廓周长，宽度就是厚度；缝合表里每条缝两边长度对得上', () => {
+  const { t, d } = make();
+  const perim = (poly) => poly.reduce((n, q, i) => n + Math.hypot(q[0] - poly[(i + 1) % poly.length][0], q[1] - poly[(i + 1) % poly.length][1]), 0);
+  for (const s of t.seams) near(s.a, s.b, Math.max(s.a, s.b) * 0.005, s.name);
+  assert.equal(t.seams.length, 5);
+  const gh = d.pieces.filter((p) => p.role === 'gussetHead'), gb = d.pieces.filter((p) => p.role === 'gussetBody');
+  assert.equal(gh.length, 2); assert.equal(gb.length, 2);
+  near(gh[0].box.w + gh[1].box.w, perim(d.byId.face.poly), 2, '头围条两段合起来 = 脸片周长');
+  near(gh[0].box.h, t.params.headThick, 0.5, '头围条宽 = 头的厚度');
+  near(gb[0].box.w + gb[1].box.w, perim(d.byId.bodyF.poly), 2, '身体围条两段合起来 = 身体前片周长');
+  near(perim(d.byId.bodyF.poly), perim(d.byId.bodyB.poly), 1e-6, '身体前后片周长一样');
+  near(gb[0].box.h, t.params.bodyThick, 0.5);
+  assert.ok(t.guides.notches.filter((n) => /^g/.test(n.piece)).length === 4, '每段围条中点有对位记号');
+  assert.ok(Array.isArray(t.sewing) && t.sewing.length >= 4 && /围条/.test(t.sewing.join()));
+  // 改厚度：围条变宽，3D 里的厚度同步变
+  const thick = make({ headThick: 240 });
+  near(thick.d.pieces.find((p) => p.role === 'gussetHead').box.h, 240, 0.5);
+  const z = (dd, id) => { const m = C.pillowMesh(dd.byId[id], dd); let hi = 0; for (let i = 2; i < m.pos.length; i += 3) hi = Math.max(hi, Math.abs(m.pos[i])); return hi; };
+  near(z(thick.d, 'face') / z(d, 'face'), 240 / 150, 0.1, '头厚度 240 / 150');
+  // 厚度 = 前后两片各 thick/2，加起来 = thick（单位和头宽 3 对应）
+  near(z(d, 'face') * 2, (150 * 3) / 320, 0.02, '头的厚度 = 150 个图纸像素');
+});
+
+test('有厚度的袋子：中间是平的，边上是圆边（不是饼干也不是球）；没有厚度的老袋子还是原来的样子', () => {
+  const { d } = make(), m = C.pillowMesh(d.byId.face, d);
+  const zs = []; for (let i = 2; i < m.pos.length; i += 3) zs.push(m.pos[i]);
+  const hi = Math.max(...zs), plateau = zs.filter((z) => z > hi * 0.98).length / zs.length;
+  assert.ok(plateau > 0.25, `脸片中间有一大片平的：${plateau.toFixed(2)}`);
+  const edge = zs.filter((z) => z > 0.02 && z < hi * 0.5).length / zs.length;
+  assert.ok(edge > 0.01 && edge < 0.2, `边上有圆边：${edge.toFixed(2)}`);
+  // 老图纸的身体袋子没有厚度字段，还是椭球样子（最高点在中间、没有大片平台）
+  const pub = C.makeDoc(ctx.NunuPattern.public), pm = C.pillowMesh(pub.byId.bodyA, pub);
+  const pz = []; for (let i = 2; i < pm.pos.length; i += 3) pz.push(pm.pos[i]);
+  const ph = Math.max(...pz);
+  assert.ok(pz.filter((z) => z > ph * 0.98).length / pz.length < 0.2);
+});
+
+test('检查：缝合边长对不上要警告，对得上不警告；围条这类不上 3D 的用途不会被当成「叠在一起」', () => {
+  const { t, d } = make();
+  const stats = { face: { faceInk: 100, faceOutside: 0 } };
+  for (const p of d.pieces.filter((q) => q.material === 'hair')) stats[p.id] = { coverage: 1, colors: [{ hex: '#7d594a', frac: 1 }] };
+  const ok = C.checks(d, stats, { faceMm: 100, seams: t.seams });
+  assert.ok(!ok.some((c) => /缝合长度/.test(c.text)), JSON.stringify(ok.map((c) => c.text)));
+  assert.ok(!ok.some((c) => /同时放了/.test(c.text)), '两段头围条不是「叠在一起」');
+  const bad = C.checks(d, stats, { faceMm: 100, seams: [{ name: '测试缝', a: 1000, b: 800 }] });
+  assert.ok(bad.some((c) => c.level === 'warn' && /测试缝/.test(c.text) && /20%/.test(c.text)));
+});

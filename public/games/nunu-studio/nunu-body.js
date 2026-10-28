@@ -13,7 +13,9 @@ const DEFAULTS = {
   bodyW: 170, bodyH: 175, legGap: 40, legDepth: 64,
   arms: 'separate', armLen: 108, armW: 40,
   ear: 'cat', earSize: 110, earTilt: 16, earSpread: 0.58,
+  headThick: 150, bodyThick: 96, // 头、身体的厚度 = 围条的宽度（图纸像素）
 };
+const FLAP_THICK = 18; // 耳朵、手臂是扁片，只有前后两层布加一点棉
 const EAR_TYPES = {
   cat: { label: '猫耳', w: 0.9, h: 1.0, mode: 'up', pts: [[-0.5, 0], [-0.47, -0.2], [-0.36, -0.5], [-0.2, -0.78], [0, -1.0], [0.12, -0.95], [0.28, -0.7], [0.42, -0.4], [0.5, -0.12], [0.5, 0], [0.25, 0.05], [0, 0.07], [-0.25, 0.05]] },
   fox: { label: '狐狸耳', w: 0.7, h: 1.25, mode: 'up', pts: [[-0.5, 0], [-0.45, -0.3], [-0.3, -0.65], [-0.1, -0.92], [0.05, -1.0], [0.2, -0.8], [0.38, -0.5], [0.5, -0.15], [0.5, 0], [0.25, 0.05], [0, 0.07], [-0.25, 0.05]] },
@@ -74,7 +76,7 @@ function bodyOutline(p, withArms) {
   const torso = densify([[-top, 0], [top, 0], [hip * 0.98, H * 0.3], [hip, H * 0.62], [hip, H], [gap, H], [gap, H - depth], [0, H - depth - 8], [-gap, H - depth], [-gap, H], [-hip, H], [-hip, H * 0.62], [-hip * 0.98, H * 0.3]], 10);
   const polys = [Shape.smoothLoop(torso, 2)];
   if (withArms) for (const s of [-1, 1]) polys.push(...armShape(p, s, true));
-  return polys.length > 1 ? unionOutline(polys) : polys[0];
+  return polys.length > 1 ? Shape.smoothLoop(unionOutline(polys), 2) : polys[0];
 }
 /** 手臂（哑铃形）：细杆 + 圆头。s = -1 在左边、1 在右边；integrated 时从肩膀伸出去 */
 function armShape(p, s, integrated) {
@@ -92,9 +94,21 @@ function earOutline(p, side) {
   return side > 0 ? mirrorPoly(poly, 0) : poly;
 }
 
+/** 照着缝的步骤（文字说明） */
+function sewingSteps(p) {
+  return [
+    '头：先把两半后脑沿中线缝在一起（对着中线上的记号），再把头围条 ① ② 首尾缝成一圈。',
+    '头围条一边缝脸片外圈（围条中点对脸片上、下记号），另一边缝后脑外圈，留一个返口，翻面填棉。',
+    '身体：围条 ① ② 首尾缝成一圈，一边缝身体前片、另一边缝身体后片，围条中点对身体上边中点，翻面填棉。',
+    '耳朵：前后两片正面相对缝弧边，底边不缝，翻面后用藏针缝缝到头顶（离中线 ' + Math.round(p.earSpread * 100) + '% 处）。',
+    p.arms === 'integrated' ? '手身一体：手臂已经包在身体轮廓里，不用另缝。' : '手臂：前后两片正面相对缝一圈留根部，翻面填一点棉，用藏针缝缝在肩膀侧边。',
+  ];
+}
+
 /** 按参数生成模板。左右（画面）对称：轴 = 版面中线 */
 function generate(params = {}) {
   const p = { ...DEFAULTS, ...params };
+  p.headThick = clamp(p.headThick, 40, 300); p.bodyThick = clamp(p.bodyThick, 30, 220);
   p.headW = clamp(p.headW, 200, 460); p.headH = clamp(p.headH, 180, 420); p.bodyW = clamp(p.bodyW, 100, 300); p.bodyH = clamp(p.bodyH, 100, 300);
   const a = p.headW / 2, b = p.headH / 2, cx0 = 0, cy0 = 0;
   const headFull = superellipse(cx0, cy0, a, b, p.headSquare, 120);
@@ -112,9 +126,9 @@ function generate(params = {}) {
   const bLeftCut = axis - p.headW / 2 - gap; // 左半的切口边（右边缘）贴着脸左边留 gap
   const dxL = bLeftCut - cx0, dyL = faceCy - cy0; // 左半平移：切口边落在 bLeftCut
   const dxR = 2 * axis - 2 * cx0 - dxL, dyR = dyL;
-  const face = { id: 'face', name: '脸片（前）', role: 'faceFlat', poly: shift(headFull, faceCx, faceCy), smooth: false, anchorPx: [faceCx, faceCy] };
-  const backL = { id: 'backL', name: '后脑·左半', role: 'headBackL', poly: shift(halfL, dxL, dyL), smooth: false, anchorPx: [cx0 + dxL, cy0 + dyL], heightPoly: shift(headFull, dxL, dyL) };
-  const backR = { id: 'backR', name: '后脑·右半', role: 'headBackR', poly: shift(halfR, dxR, dyR), smooth: false, anchorPx: [cx0 + dxR, cy0 + dyR], heightPoly: shift(headFull, dxR, dyR) };
+  const face = { id: 'face', name: '脸片（前）', role: 'faceFlat', poly: shift(headFull, faceCx, faceCy), smooth: false, thick: p.headThick, anchorPx: [faceCx, faceCy] };
+  const backL = { id: 'backL', name: '后脑·左半', role: 'headBackL', poly: shift(halfL, dxL, dyL), smooth: false, thick: p.headThick, anchorPx: [cx0 + dxL, cy0 + dyL], heightPoly: shift(headFull, dxL, dyL) };
+  const backR = { id: 'backR', name: '后脑·右半', role: 'headBackR', poly: shift(halfR, dxR, dyR), smooth: false, thick: p.headThick, anchorPx: [cx0 + dxR, cy0 + dyR], heightPoly: shift(headFull, dxR, dyR) };
   const headPlace = { y: headCy };
   face.place = headPlace; backL.place = headPlace; backR.place = headPlace;
   // ---- 第二排：耳朵（左边两片，右边是它们的镜像） ----
@@ -122,9 +136,9 @@ function generate(params = {}) {
   const ears = [];
   for (const [id, name, i] of [['earLF', '左耳·前', 0], ['earLB', '左耳·后', 1]]) {
     const x = axis - 40 - (i + 1) * earBox.w - i * earGap;
-    ears.push({ id, name, role: id, poly: shift(earL, x - earBox.x, row2Y - earBox.y), smooth: false });
+    ears.push({ id, name, role: id, thick: FLAP_THICK, poly: shift(earL, x - earBox.x, row2Y - earBox.y), smooth: false });
   }
-  const earMirror = (e, id, name) => ({ id, name, role: id, poly: mirrorPoly(e.poly, axis), smooth: false });
+  const earMirror = (e, id, name) => ({ id, name, role: id, thick: FLAP_THICK, poly: mirrorPoly(e.poly, axis), smooth: false });
   ears.push(earMirror(ears[0], 'earRF', '右耳·前'), earMirror(ears[1], 'earRB', '右耳·后'));
   // 耳朵怎么贴在头上：上翘的耳朵底边中点贴在头顶两侧，往外歪 earTilt 度；垂耳贴在头的两侧，往下垂
   const sp = clamp(p.earSpread, 0.2, 0.92), nExp = p.headSquare, topAt = (frac) => (p.headH / 2) * k * Math.pow(Math.max(0, 1 - Math.pow(frac, nExp)), 1 / nExp);
@@ -139,16 +153,38 @@ function generate(params = {}) {
   let row3Bottom = row2Y + earBox.h;
   if (armL) {
     const abx = C.boxOfPoly(armL), armY = row2Y + earBox.h + 40, armGap = 24;
-    const placed = [['armLF', '左臂·前', 0], ['armLB', '左臂·后', 1]].map(([id, name, i]) => ({ id, name, role: id, place: { anchor: 'center' }, poly: shift(armL, axis + 50 + i * (abx.w + armGap) - abx.x, armY - abx.y), smooth: false }));
-    const mirrored = [['armRF', '右臂·前', placed[0]], ['armRB', '右臂·后', placed[1]]].map(([id, name, src]) => ({ id, name, role: id, place: { anchor: 'center' }, poly: mirrorPoly(src.poly, axis), smooth: false }));
+    const placed = [['armLF', '左臂·前', 0], ['armLB', '左臂·后', 1]].map(([id, name, i]) => ({ id, name, role: id, thick: FLAP_THICK, place: { anchor: 'center' }, poly: shift(armL, axis + 50 + i * (abx.w + armGap) - abx.x, armY - abx.y), smooth: false }));
+    const mirrored = [['armRF', '右臂·前', placed[0]], ['armRB', '右臂·后', placed[1]]].map(([id, name, src]) => ({ id, name, role: id, thick: FLAP_THICK, place: { anchor: 'center' }, poly: mirrorPoly(src.poly, axis), smooth: false }));
     pieces.push(...placed, ...mirrored);
     row3Bottom = armY + abx.h;
   }
   // ---- 最下面一排：身体前、后 ----
   const bb = C.boxOfPoly(bodyPoly), row3Y = row3Bottom + 56;
-  const bodyF = { id: 'bodyF', name: '身体·前', role: 'bodyFront', poly: shift(bodyPoly, axis - midGap / 2 - bb.w / 2 - bb.x, row3Y - bb.y) };
-  const bodyB = { id: 'bodyB', name: '身体·后', role: 'bodyBack', poly: shift(bodyPoly, axis + midGap / 2 + bb.w / 2 - bb.x, row3Y - bb.y) };
+  const bodyF = { id: 'bodyF', name: '身体·前', role: 'bodyFront', thick: p.bodyThick, smooth: false, poly: shift(bodyPoly, axis - midGap / 2 - bb.w / 2 - bb.x, row3Y - bb.y) };
+  const bodyB = { id: 'bodyB', name: '身体·后', role: 'bodyBack', thick: p.bodyThick, smooth: false, poly: shift(bodyPoly, axis + midGap / 2 + bb.w / 2 - bb.x, row3Y - bb.y) };
   pieces.push(bodyF, bodyB);
+  // ---- 围条（侧围）：头和身体各一条，长度 = 轮廓周长，宽度 = 厚度；太长，对半剪成两段，每段中点有对位记号 ----
+  const perim = (poly) => poly.reduce((n, q, i) => n + Math.hypot(q[0] - poly[(i + 1) % poly.length][0], q[1] - poly[(i + 1) % poly.length][1]), 0);
+  const headPer = perim(headFull), bodyPer = perim(bodyPoly), stripY = Math.max(...pieces.map((q) => C.boxOfPoly(q.poly).y + C.boxOfPoly(q.poly).h)) + 56;
+  const rect = (x, y, w, h) => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+  const strips = [], marks = [];
+  const mkStrip = (id, name, role, len, w, x, y) => { strips.push({ id, name, role, poly: rect(x, y, len, w), smooth: false }); marks.push({ piece: id, x: x + len / 2, y, dir: -1 }); return len; };
+  const hl = headPer / 2, bl = bodyPer / 2, sx0 = m;
+  mkStrip('gH1', '头围条 ①（上半圈）', 'gussetHead', hl, p.headThick, sx0, stripY);
+  mkStrip('gH2', '头围条 ②（下半圈）', 'gussetHead', hl, p.headThick, sx0, stripY + p.headThick + 30);
+  mkStrip('gB1', '身体围条 ①（上半圈）', 'gussetBody', bl, p.bodyThick, sx0 + hl + 60, stripY);
+  mkStrip('gB2', '身体围条 ②（下半圈）', 'gussetBody', bl, p.bodyThick, sx0 + hl + 60, stripY + p.bodyThick + 30);
+  pieces.push(...strips);
+  // 缝合表：每条缝两边的长度（图纸像素），检查时换成毫米比较
+  const cutLen = Math.hypot(halfL[0][0] - halfL[halfL.length - 1][0], halfL[0][1] - halfL[halfL.length - 1][1]);
+  const arcLen = perim(halfL) - cutLen;
+  const seams = [
+    { name: '头围条 ↔ 脸片外圈', a: perim(face.poly), b: hl * 2 },
+    { name: '头围条 ↔ 后脑两半外圈', a: arcLen * 2, b: hl * 2 },
+    { name: '后脑左右两半的中线缝', a: cutLen, b: cutLen },
+    { name: '身体围条 ↔ 身体前片', a: perim(bodyF.poly), b: bl * 2 },
+    { name: '身体围条 ↔ 身体后片', a: perim(bodyB.poly), b: bl * 2 },
+  ];
   const all = bounds(pieces.map((q) => q.poly)), W = Math.max(W0, all.x1 + m), H = all.y1 + m;
   const pairs = { backL: 'backR', backR: 'backL', earLF: 'earRF', earRF: 'earLF', earLB: 'earRB', earRB: 'earLB' };
   if (armL) Object.assign(pairs, { armLF: 'armRF', armRF: 'armLF', armLB: 'armRB', armRB: 'armLB' });
@@ -159,9 +195,9 @@ function generate(params = {}) {
     eyeL: [[fcx - a * 0.7, fcy + b * 0.02], [fcx - a * 0.08, fcy + b * 0.02], [fcx - a * 0.08, fcy + b * 0.36], [fcx - a * 0.7, fcy + b * 0.36]],
     eyeR: [[fcx + a * 0.08, fcy + b * 0.02], [fcx + a * 0.7, fcy + b * 0.02], [fcx + a * 0.7, fcy + b * 0.36], [fcx + a * 0.08, fcy + b * 0.36]],
     mouth: [[fcx - a * 0.1, fcy + b * 0.46], [fcx + a * 0.1, fcy + b * 0.46], [fcx + a * 0.1, fcy + b * 0.62], [fcx - a * 0.1, fcy + b * 0.62]],
-    notches: [{ piece: 'face', x: fcx, y: fcy - b, dir: -1 }, { piece: 'face', x: fcx, y: fcy + b, dir: 1 }],
+    notches: [{ piece: 'face', x: fcx, y: fcy - b, dir: -1 }, { piece: 'face', x: fcx, y: fcy + b, dir: 1 }, ...marks],
   };
-  return { id: 'custom-body', name: '自创体子（球豆体 · 扁平）', w: Math.ceil(W), h: Math.ceil(H), axis, faceWidthPx: p.headW, flat: true, custom: true, note: '自己调的扁平 2.5D 体子：脸片 + 后脑两半缝成扁头，身体自带腿，耳朵和手臂可换样子。', params: p, pieces, pairs, guides };
+  return { id: 'custom-body', name: '自创体子（球豆体 · 扁平）', w: Math.ceil(W), h: Math.ceil(H), axis, faceWidthPx: p.headW, flat: true, custom: true, note: '自己调的扁平 2.5D 体子：头和身体都是前片 + 后片 + 一条围条（侧围）缝出厚度，耳朵和手臂是扁片。', params: p, pieces, pairs, guides, seams, sewing: sewingSteps(p) };
 }
 
 root.NunuBody = { DEFAULTS, EAR_TYPES, earLabel, generate };

@@ -539,7 +539,7 @@ function computeReport() {
   const cutAreas = {};
   for (const p of doc.pieces) cutAreas[p.id] = C.areaOfPoly(cutPoly(p));
   const bom = C.bom(doc, stats, { faceMm: state.faceMm, skin: state.skin, cutAreas, derived });
-  const list = C.checks(doc, stats, { faceMm: state.faceMm, guardOff: guardOffCount(), derived });
+  const list = C.checks(doc, stats, { faceMm: state.faceMm, guardOff: guardOffCount(), derived, seams: tplById(state.template).seams });
   report = { bom, checks: list, errors: list.filter((c) => c.level === 'error').length, warns: list.filter((c) => c.level === 'warn').length };
   const b = $('#checkBadge');
   b.textContent = report.errors ? String(report.errors) : report.warns ? String(report.warns) : '';
@@ -901,6 +901,8 @@ const BODY_FIELDS = [
   ['legDepth', '腿缝有多深', 30, 110, 1, (v) => Math.round((v / 320) * 100) + '%'],
   ['armLen', '手臂长度', 60, 180, 1, (v) => Math.round((v / 320) * 100) + '%'],
   ['armW', '手臂粗细', 26, 70, 1, (v) => Math.round((v / 320) * 100) + '%'],
+  ['headThick', '头的厚度（= 头围条的宽）', 60, 260, 1, (v) => Math.round((v / 320) * 100) + '%'],
+  ['bodyThick', '身体的厚度（= 身体围条的宽）', 40, 200, 1, (v) => Math.round((v / 320) * 100) + '%'],
   ['earSize', '耳朵大小', 70, 170, 1, (v) => Math.round((v / 320) * 100) + '%'],
   ['earTilt', '耳朵往外歪几度', 0, 40, 1, (v) => v + '°'],
   ['earSpread', '耳朵离头顶中线多远', 0.25, 0.9, 0.01, (v) => Math.round(v * 100) + '%'],
@@ -916,7 +918,21 @@ function bodyHtml() {
       <label style="font-size:12px;margin-left:10px">手臂 <select id="b-arms"><option value="separate" ${cu.arms === 'separate' ? 'selected' : ''}>手臂分开做</option><option value="integrated" ${cu.arms === 'integrated' ? 'selected' : ''}>手身一体</option></select></label>
       <button id="bodyReset" style="margin-left:10px">恢复默认体型</button></div>
     <div class="fields" style="margin-top:8px">${fields}</div>
+    ${on ? sewingHtml() : ''}
     <div class="note-box">改体型以后，已经画上去的笔画留在原来的位置，超出新轮廓的地方会被裁掉；想重来可以在「设置」里清空。耳朵样子参考的是常见的猫耳、狗耳、鹿耳、鼠耳、狐狸耳、狼耳纸样，缝制前先用便宜布试缝。</div>`;
+}
+/** 缝合表：每条缝两边的长度（毫米），对不上会标红；下面是照着缝的步骤 */
+function sewingHtml() {
+  const tpl = tplById(state.template);
+  if (!tpl.seams) return '';
+  const k = C.mmPerPx(doc, state.faceMm);
+  const rows = tpl.seams.map((sm) => {
+    const a = sm.a * k, b = sm.b * k, off = Math.abs(a - b) / Math.max(a, b) > 0.03;
+    return `<tr><td>${esc(sm.name)}</td><td>${a.toFixed(0)} mm</td><td>${b.toFixed(0)} mm</td><td>${off ? '<b style="color:var(--bad)">对不上</b>' : '✓'}</td></tr>`;
+  }).join('');
+  const steps = (tpl.sewing || []).map((t, i) => `<li>${i + 1}. ${esc(t)}</li>`).join('');
+  return `<div class="two-col" style="margin-top:14px"><div><h3>缝合表（每条缝两边要一样长）</h3><table><tr><th>缝哪两边</th><th>一边</th><th>另一边</th><th></th></tr>${rows}</table></div>
+    <div><h3>照着这样缝</h3><ol class="steps" style="margin:0;padding:0;list-style:none">${steps}</ol></div></div>`;
 }
 let bodyTimer = 0;
 function customChanged() {
