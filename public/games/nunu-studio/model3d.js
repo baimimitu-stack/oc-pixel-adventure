@@ -99,7 +99,7 @@ function create(canvas) {
     for (const p of patches.values()) { group.remove(p.mesh); p.mesh.geometry.dispose(); p.tex.dispose(); p.mat.dispose(); }
     patches.clear();
     skinMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(skinHex).convertSRGBToLinear(), roughness: 0.95, metalness: 0 });
-    for (const k of Object.keys(C.TARGETS)) { // 只有头有一个底（光头）；身体、手臂、耳朵完全由裁片自己缝出来
+    if (!doc.flat) for (const k of Object.keys(C.TARGETS)) { // 只有圆头有一个底（光头）；扁平头、身体、手臂、耳朵完全由裁片自己缝出来
       const m = new THREE.Mesh(ellipsoidGeometry(k), skinMat);
       m.userData.base = k;
       group.add(m);
@@ -119,12 +119,12 @@ function create(canvas) {
     for (const sh of shells || []) {
       const tex = texOf(sh.canvas);
       const mat = new THREE.MeshStandardMaterial({ map: tex, transparent: true, alphaTest: 0.3, roughness: 0.85, metalness: 0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -1 });
-      const mesh = new THREE.Mesh(patchGeometry(sh.piece, 40, { target: 'head', off: sh.off }), mat);
+      const mesh = new THREE.Mesh(sh.shellPiece ? pillowGeometry(sh.shellPiece, doc) : patchGeometry(sh.piece, 40, { target: 'head', off: sh.off }), mat);
       mesh.userData.pieceId = sh.piece.id;
       group.add(mesh);
       patches.set(sh.piece.id, { mesh, tex, mat });
     }
-    view.target = C.TARGETS.head.pos[1] - 0.4;
+    view.target = doc.flat ? 1.5 : C.TARGETS.head.pos[1] - 0.4;
   }
   /** 头顶的发片：画板上画出来的每一块，做成一张贴在头顶的卡片，底边贴着头、往外翘；左右位置跟它在画板上的位置一致 */
   const cards = [];

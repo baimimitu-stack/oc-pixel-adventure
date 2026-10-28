@@ -17,7 +17,7 @@ const RES = 2; // 每个图纸像素用几个画布像素
 const STORE = 'nunu-v4', IMPORTS = 'nunu-v4-imports';
 const DEFAULTS = {
   version: 4, name: '我的第一只努努', template: 'nunu-public', faceMm: 100, seamMm: 6, guardMm: 3, skin: '#f1dfcd',
-  hairPalette: [], inkPalette: [], tplData: {},
+  hairPalette: [], inkPalette: [], custom: null, tplData: {},
 };
 function loadState() {
   try {
@@ -42,7 +42,14 @@ const hairColors = () => [...HAIR_COLORS, ...state.hairPalette.filter((c) => !HA
 const inkColors = () => [...INK_COLORS, ...(state.inkPalette || []).filter((c) => !INK_COLORS.includes(c.toLowerCase()))];
 const SKINS = ['#f1dfcd', '#f2d3ce', '#dac4aa', '#d1ddc8', '#d4d9e8'];
 
-const allTemplates = () => [P.public, ...imports];
+let customCache = null;
+/** 自创体子：参数存在 state.custom，改一下参数就重新算一套裁片（结果缓存着，参数没变就不重算） */
+function customTemplate() {
+  const key = JSON.stringify(state.custom || {});
+  if (!customCache || customCache.key !== key) customCache = { key, tpl: window.NunuBody.generate(state.custom || {}) };
+  return customCache.tpl;
+}
+const allTemplates = () => [P.public, customTemplate(), ...imports];
 const tplById = (id) => allTemplates().find((t) => t.id === id) || P.public;
 const td = () => (state.tplData[state.template] ||= { roles: {}, materials: {}, strokes: [], cut: {} });
 
@@ -123,7 +130,7 @@ function focusRect(kind) {
   const pad = 36, fit = (b) => sheet.fitRect(b.x - pad, b.y - pad, b.w + pad * 2, b.h + pad * 2);
   if (kind === 'all') sheet.fit();
   else if (kind === 'pattern') sheet.fitRect(0, 0, doc.w, doc.h);
-  else if (kind === 'face') { const f = doc.pieces.find((q) => q.role === 'face'); if (f) fit(f.box); else sheet.fit(); }
+  else if (kind === 'face') { const f = doc.pieces.find((q) => C.isFace(q)); if (f) fit(f.box); else sheet.fit(); }
   else if (kind === 'hair') {
     const bd = boards.find((q) => q.board === ui.hairTarget);
     if (bd) fit({ x: bd.box.x, y: bd.box.y - 18, w: bd.box.w, h: bd.box.h + 18 });
@@ -183,7 +190,7 @@ function pointCheck(p, layer, x, y, erase) {
   // 发片布整片都能涂：在多边形里却被区域挡住，只是边缘差一个像素，不用提示
   if (layer === 'hair' && p.material === 'hair') return { ok: false, reason: '', quiet: true };
   if (layer === 'face') return { ok: false, reason: '脸只能画在脸窗里（蓝色虚线框住的那块），额头和边上不行。' };
-  if (layer === 'hair' && p.role === 'face') return { ok: false, reason: '前发只能画在额头上（蓝色虚线弧线以上）。弧线以下是脸窗，留给眼睛和嘴。' };
+  if (layer === 'hair' && C.isFace(p)) return { ok: false, reason: '前发只能画在额头上（蓝色虚线弧线以上）。弧线以下是脸窗，留给眼睛和嘴。' };
   return { ok: false, reason: `离缝线太近了（要留 ${state.guardMm} mm 缝份），往里一点。` };
 }
 
@@ -197,14 +204,14 @@ function paintStroke(p, layer, st, fromIdx) {
   ctx.strokeStyle = ctx.fillStyle = st.c;
   ctx.lineWidth = st.w;
   ctx.lineCap = ctx.lineJoin = 'round';
-  const start = Math.max(0, fromIdx);
+  const start = Math.max(0, fromIdx), ox = st.rel ? p.box.x : 0, oy = st.rel ? p.box.y : 0;
   if (pts.length === 2 && start === 0) {
-    ctx.beginPath(); ctx.arc(pts[0], pts[1], st.w / 2, 0, C.TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(pts[0] + ox, pts[1] + oy, st.w / 2, 0, C.TAU); ctx.fill();
   } else {
     ctx.beginPath();
-    ctx.moveTo(pts[start], pts[start + 1]);
-    if (start + 2 >= pts.length) ctx.lineTo(pts[start] + 0.001, pts[start + 1]);
-    for (let i = start + 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
+    ctx.moveTo(pts[start] + ox, pts[start + 1] + oy);
+    if (start + 2 >= pts.length) ctx.lineTo(pts[start] + ox + 0.001, pts[start + 1] + oy);
+    for (let i = start + 2; i < pts.length; i += 2) ctx.lineTo(pts[i] + ox, pts[i + 1] + oy);
     ctx.stroke();
   }
   ctx.restore();
@@ -257,12 +264,12 @@ function feed(hit) {
     }
     if (tr.pieceId !== pid) { tr.stroke = null; tr.last = null; tr.pieceId = pid; }
     if (!tr.stroke) {
-      tr.stroke = { n: nextStrokeId(), p: pid, l: cur.layer, c: cur.color, w: cur.w, e: cur.erase, x: cur.guardOff ? 1 : 0, pts: [] };
+      tr.stroke = { n: nextStrokeId(), p: pid, l: cur.layer, c: cur.color, w: cur.w, e: cur.erase, x: cur.guardOff ? 1 : 0, rel: p.role === 'board' ? 1 : 0, pts: [] };
       td().strokes.push(tr.stroke);
       cur.group.push(tr.stroke);
     }
     const from = tr.stroke.pts.length >= 2 ? tr.stroke.pts.length - 2 : 0;
-    tr.stroke.pts.push(r1(x), r1(y));
+    tr.stroke.pts.push(r1(x - (tr.stroke.rel ? p.box.x : 0)), r1(y - (tr.stroke.rel ? p.box.y : 0)));
     paintStroke(p, cur.layer, tr.stroke, tr.stroke.pts.length === 2 ? 0 : from);
     cur.touched.add(pid);
     markPiece(pid);
@@ -324,7 +331,22 @@ function boardGuides(c, b) {
   c.strokeStyle = 'rgba(70,120,170,.75)';
   c.fillStyle = 'rgba(70,120,170,.8)';
   c.font = '600 12px system-ui, "PingFang SC", "Microsoft YaHei", sans-serif';
-  if (b.board === 'front') {
+  if (b.flat && b.board === 'front') {
+    c.beginPath(); b.poly.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.closePath(); c.stroke();
+    if (doc.guides) { const [dx, dy] = b.shiftBy; c.beginPath(); doc.guides.lens.forEach(([x, y], i) => (i ? c.lineTo(x + dx, y + dy) : c.moveTo(x + dx, y + dy))); c.closePath(); c.stroke(); }
+    c.setLineDash([]);
+    c.textAlign = 'center';
+    c.fillText('脸片轮廓', b.anchorPx[0], b.box.y + b.box.h - 8);
+  } else if (b.flat && b.board === 'back') {
+    const mx = b.anchorPx[0];
+    c.beginPath(); b.poly.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.closePath(); c.stroke();
+    c.strokeStyle = 'rgba(190,150,40,.9)';
+    c.beginPath(); c.moveTo(mx, b.box.y); c.lineTo(mx, b.box.y + b.box.h); c.stroke();
+    c.setLineDash([]);
+    c.fillStyle = 'rgba(150,115,20,.9)';
+    c.textAlign = 'center';
+    c.fillText('后脑正中（两半缝在一起）', mx, b.box.y + b.box.h - 8);
+  } else if (b.board === 'front') {
     const cx = b.box.x + b.box.w / 2, cy = b.box.y + b.box.h / 2, [fx, fy] = b.faceCenter, [rx, ry] = b.faceR;
     c.beginPath(); c.ellipse(cx, cy, rx, ry, 0, 0, C.TAU); c.stroke();
     if (doc.guides) { c.beginPath(); doc.guides.lens.forEach(([x, y], i) => (i ? c.lineTo(cx + x - fx, cy + y - fy) : c.moveTo(cx + x - fx, cy + y - fy))); c.closePath(); c.stroke(); }
@@ -332,7 +354,7 @@ function boardGuides(c, b) {
     c.textAlign = 'center';
     c.fillText('脸盖', cx, cy + ry - 8);
     c.fillText('发际线', cx, cy - 18);
-  } else if (b.board === 'back') {
+  } else if (b.board === 'back' && !b.flat) {
     const mx = b.box.x + b.box.w / 2;
     c.strokeStyle = 'rgba(190,150,40,.9)';
     c.beginPath(); c.moveTo(mx, b.box.y); c.lineTo(mx, b.box.y + b.box.h); c.stroke();
@@ -357,7 +379,7 @@ function compose(p) {
   c.fillRect(p.box.x - 2, p.box.y - 2, p.box.w + 4, p.box.h + 4);
   for (const l of ['skin', 'face', 'hair']) if (r.layers[l]) c.drawImage(r.layers[l], p.box.x, p.box.y, p.box.w, p.box.h);
   if (p.role === 'board' && ui.guides) boardGuides(c, p);
-  if (ui.guides && p.role === 'face' && doc.guides) {
+  if (ui.guides && C.isFace(p) && doc.guides) {
     c.save();
     c.setLineDash([6, 5]);
     c.lineWidth = 1.7;
@@ -624,7 +646,7 @@ function setupSheet() {
 /* ============ 3D 交互 ============ */
 function buildModel() {
   if (!model) return;
-  const shells = boards.filter((b) => b.board !== 'top').map((b) => ({ piece: b, canvas: layerCanvas(b, 'hair'), off: b.board === 'front' ? 0.06 : 0.07 }));
+  const shells = boards.filter((b) => b.board !== 'top').map((b) => ({ piece: b, canvas: layerCanvas(b, 'hair'), off: b.board === 'front' ? 0.06 : 0.07, shellPiece: b.flat ? { ...b, role: b.shellRole } : null }));
   model.build(doc, Object.fromEntries(doc.pieces.map((p) => [p.id, { canvas: rt[p.id].comp }])), state.skin, shells);
   dirty.scene = true;
   schedule();
@@ -841,7 +863,7 @@ function field(k, label, min, max, unit) {
 function roleOptions(sel) { return C.ROLE_KEYS.map((k) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${C.ROLES[k].label}</option>`).join(''); }
 function dockHtml() {
   if (ui.tab === 'pattern') {
-    const cards = allTemplates().map((t) => `<button class="tpl ${state.template === t.id ? 'on' : ''}" data-tpl="${t.id}"><b>${esc(t.name)}</b><span class="lvl">${t.imported ? '导入的' : '公开图纸'}</span><p>${t.imported ? '自动从图片里拆出来的，用途要自己选。' : esc(t.note)}</p><p>${t.pieces.length} 片</p></button>`).join('');
+    const cards = allTemplates().map((t) => `<button class="tpl ${state.template === t.id ? 'on' : ''}" data-tpl="${t.id}"><b>${esc(t.name)}</b><span class="lvl">${t.imported ? '导入的' : t.custom ? '自创' : '公开图纸'}</span><p>${t.imported ? '自动从图片里拆出来的，用途要自己选。' : esc(t.note)}</p><p>${t.pieces.length} 片</p></button>`).join('');
     const rows = doc.pieces.map((p) => `<tr class="pick ${p.id === ui.selected ? 'on' : ''}" data-pick="${p.id}"><td><span class="num">${p.label}</span></td><td>${esc(p.name)}</td>
       <td><select data-role="${p.id}" aria-label="${esc(p.name)}的用途">${roleOptions(p.role)}</select></td>
       <td><select data-mat="${p.id}" aria-label="${esc(p.name)}的布"><option value="skin" ${p.material === 'skin' ? 'selected' : ''}>肤色布</option><option value="hair" ${p.material === 'hair' ? 'selected' : ''}>发片布</option></select></td></tr>`).join('');
@@ -850,6 +872,7 @@ function dockHtml() {
       <div class="note-box">用的是网上流传的公开努努图纸。脸、头顶发、下巴、后脑是按“同色相缝”标注图定的，耳朵、手臂是我猜的，猜错了就在右边改「用途」。想用别的公开图纸：导入一张黑线白底的图，自动拆成一片一片。图纸的出处和授权要自己确认。</div></div>
       <div><h3>每一片的用途和布</h3><table><tr><th>编号</th><th>名称</th><th>用途（贴在 3D 哪里）</th><th>布</th></tr>${rows}</table></div></div>`;
   }
+  if (ui.tab === 'body') return bodyHtml();
   if (ui.tab === 'bom') {
     const b = report.bom;
     const fab = b.fabrics.map((f) => `<tr><td><span class="chip" style="background:${f.hex}"></span>${f.label} ${f.hex}</td><td>${f.pieces} 片</td><td>${f.areaCm2.toFixed(0)} cm²</td><td>${f.buyCm} cm</td></tr>`).join('');
@@ -867,6 +890,48 @@ function dockHtml() {
     <div class="row"><span style="font-size:12px">肤色布</span>${SKINS.map((c) => `<button class="swatch ${state.skin === c ? 'on' : ''}" data-skin="${c}" style="background:${c}" aria-label="布色 ${c}"></button>`).join('')}<input type="color" id="skinCustom" value="${state.skin}" aria-label="自定义布色"></div>
     <div class="row"><button id="clearAll">清空这份图纸上所有笔迹（撤销不了，慎点）</button></div>
     <div class="note-box">原图没有标尺，真实大小由上面的宽度决定：先量你想要的脸片宽度填进去，打印出来再用 5 cm 校准尺核对一遍。裁出来的布会有形变，先用便宜布试缝，再裁正式布料。</div>`;
+}
+/** 自创体子页签：拖滑条，裁片跟着变 */
+const BODY_FIELDS = [
+  ['headH', '头的高度（脸片宽的 %）', 200, 400, 1, (v) => Math.round((v / 320) * 100) + '%'],
+  ['headSquare', '头：圆 ↔ 方', 2, 4.5, 0.1, (v) => v.toFixed(1)],
+  ['bodyW', '身体宽（脸片宽的 %）', 110, 260, 1, (v) => Math.round((v / 320) * 100) + '%'],
+  ['bodyH', '身体高（脸片宽的 %）', 110, 260, 1, (v) => Math.round((v / 320) * 100) + '%'],
+  ['legGap', '两腿之间的缝', 20, 90, 1, (v) => Math.round((v / 320) * 100) + '%'],
+  ['legDepth', '腿缝有多深', 30, 110, 1, (v) => Math.round((v / 320) * 100) + '%'],
+  ['armLen', '手臂长度', 60, 180, 1, (v) => Math.round((v / 320) * 100) + '%'],
+  ['armW', '手臂粗细', 26, 70, 1, (v) => Math.round((v / 320) * 100) + '%'],
+  ['earSize', '耳朵大小', 70, 170, 1, (v) => Math.round((v / 320) * 100) + '%'],
+  ['earTilt', '耳朵往外歪几度', 0, 40, 1, (v) => v + '°'],
+  ['earSpread', '耳朵离头顶中线多远', 0.25, 0.9, 0.01, (v) => Math.round(v * 100) + '%'],
+];
+function bodyHtml() {
+  const on = state.template === 'custom-body', cu = { ...window.NunuBody.DEFAULTS, ...(state.custom || {}) };
+  const fields = BODY_FIELDS.map(([k, label, min, max, step, fmt]) => `<div class="field"><label for="b-${k}">${label}<output id="bo-${k}">${fmt(cu[k])}</output></label><input type="range" id="b-${k}" data-bk="${k}" min="${min}" max="${max}" step="${step}" value="${cu[k]}"></div>`).join('');
+  const ears = Object.entries(window.NunuBody.EAR_TYPES).map(([k, t]) => `<option value="${k}" ${cu.ear === k ? 'selected' : ''}>${t.label}</option>`).join('');
+  return `<h3>自创体子（球豆体 · 扁平 2.5D）</h3>
+    <p>头是脸片（前片）和后脑左右两半（后片）对折缝成的扁头，身体前后两片自带两条腿，耳朵和手臂可以换样子。拖滑条，裁片和 3D 一起变；画脸、画发片、备料、导出都直接能用。</p>
+    ${on ? '' : '<div class="row"><button class="primary" id="useCustom">切换到自创体子</button><span style="font-size:12px;color:var(--muted)">现在用的是别的图纸，你画的东西各自分开存。</span></div>'}
+    <div class="row"><label style="font-size:12px">耳朵 <select id="b-ear">${ears}</select></label>
+      <label style="font-size:12px;margin-left:10px">手臂 <select id="b-arms"><option value="separate" ${cu.arms === 'separate' ? 'selected' : ''}>手臂分开做</option><option value="integrated" ${cu.arms === 'integrated' ? 'selected' : ''}>手身一体</option></select></label>
+      <button id="bodyReset" style="margin-left:10px">恢复默认体型</button></div>
+    <div class="fields" style="margin-top:8px">${fields}</div>
+    <div class="note-box">改体型以后，已经画上去的笔画留在原来的位置，超出新轮廓的地方会被裁掉；想重来可以在「设置」里清空。耳朵样子参考的是常见的猫耳、狗耳、鹿耳、鼠耳、狐狸耳、狼耳纸样，缝制前先用便宜布试缝。</div>`;
+}
+let bodyTimer = 0;
+function customChanged() {
+  clearTimeout(bodyTimer);
+  bodyTimer = setTimeout(() => {
+    if (state.template !== 'custom-body') { scheduleSave(); return; }
+    buildDoc(true);
+    replayAll();
+    sheet.setDoc(doc, true);
+    buildModel();
+    markAll();
+    computeStats();
+    updateHint();
+    scheduleSave();
+  }, 140);
 }
 function renderDock() {
   if (!report) return;
@@ -900,6 +965,21 @@ function wireDock() {
     markAll(); computeStats(); scheduleSave(); renderDock();
   };
   $$('#dockBody [data-tpl]').forEach((b) => { b.onclick = () => { if (state.template !== b.dataset.tpl) switchTemplate(b.dataset.tpl); }; });
+  $$('#dockBody [data-bk]').forEach((el) => {
+    el.oninput = () => {
+      const f = BODY_FIELDS.find((q) => q[0] === el.dataset.bk);
+      state.custom = { ...(state.custom || {}), [el.dataset.bk]: +el.value };
+      $('#bo-' + el.dataset.bk).textContent = f[5](+el.value);
+      customChanged();
+    };
+  });
+  const earSel = $('#b-ear'), armSel = $('#b-arms');
+  if (earSel) earSel.onchange = () => { state.custom = { ...(state.custom || {}), ear: earSel.value }; customChanged(); };
+  if (armSel) armSel.onchange = () => { state.custom = { ...(state.custom || {}), arms: armSel.value }; customChanged(); };
+  const useC = $('#useCustom');
+  if (useC) useC.onclick = () => { switchTemplate('custom-body'); };
+  const resetC = $('#bodyReset');
+  if (resetC) resetC.onclick = () => { state.custom = null; customChanged(); renderDock(); };
   const imp = $('#importBtn');
   if (imp) imp.onclick = () => $('#importFile').click();
   const reset = $('#resetRoles');
@@ -1020,7 +1100,7 @@ function init() {
   window.__nunu = {
     state, ui, rt, C, history,
     get doc() { return doc; }, get stats() { return stats; }, get report() { return report; }, sheet, model,
-    startStroke, feed, endStroke, undo, redo, computeStats, selectPiece, switchTemplate, importImage, pointCheck, zoneOf, compose, td,
+    customTemplate, startStroke, feed, endStroke, undo, redo, computeStats, selectPiece, switchTemplate, importImage, pointCheck, zoneOf, compose, td,
   };
 }
 init();

@@ -21,6 +21,13 @@ const ROLES = {
   // 两片大叶子是后脑：黄边互相缝在一起（后脑正中），红边缝头顶发，下边接身体后片
   backL: { label: '后脑·左', material: 'hair', target: 'head', kind: 'leaf', sign: -1, off: HEAD_OFF },
   backR: { label: '后脑·右', material: 'hair', target: 'head', kind: 'leaf', sign: 1, off: HEAD_OFF },
+  // 扁平（2.5D 球豆体）的头：脸片是前片，后面两半缝在一起是后片，前后对折缝成一个扁袋，和身体一样
+  faceFlat: { label: '脸（扁平头前片）', material: 'skin', target: 'pillow', kind: 'pillow', group: 'head', side: 1, face: true },
+  headBackL: { label: '后脑·左半（扁平头）', material: 'hair', target: 'pillow', kind: 'pillow', group: 'head', side: -1 },
+  headBackR: { label: '后脑·右半（扁平头）', material: 'hair', target: 'pillow', kind: 'pillow', group: 'head', side: -1 },
+  // 扁平头上另起的发片层（前发、后发）：和头同形，比头皮布再凸出去一点；不给用户选
+  hairFlatFront: { label: '前发层', material: 'skin', target: 'pillow', kind: 'pillow', group: 'head', side: 1, lift: 0.03, hidden: true },
+  hairFlatBack: { label: '后发层', material: 'skin', target: 'pillow', kind: 'pillow', group: 'head', side: -1, lift: 0.03, hidden: true },
   // 身体、耳朵、手臂：前后两片对折缝合成扁扁的一个袋子，袋子的轮廓就是裁片的轮廓（身体片自带两条腿）
   bodyFront: { label: '身体·前', material: 'skin', target: 'pillow', kind: 'pillow', group: 'body', side: 1 },
   bodyBack: { label: '身体·后', material: 'skin', target: 'pillow', kind: 'pillow', group: 'body', side: -1 },
@@ -33,7 +40,9 @@ const ROLES = {
   armRF: { label: '右臂·前', material: 'skin', target: 'pillow', kind: 'pillow', group: 'armR', side: 1 },
   armRB: { label: '右臂·后', material: 'skin', target: 'pillow', kind: 'pillow', group: 'armR', side: -1 },
 };
-const ROLE_KEYS = Object.keys(ROLES);
+const ROLE_KEYS = Object.keys(ROLES).filter((k) => !ROLES[k].hidden);
+/** 是不是脸片（画脸、眼嘴参考框、前发画板都认它） */
+const isFace = (p) => !!(ROLES[p.role] && ROLES[p.role].face);
 
 /** 3D 里的部件：椭球 + 位置 + 绕 z 转多少。单位随便，只要比例好看 */
 const TARGETS = {
@@ -41,6 +50,7 @@ const TARGETS = {
 };
 /** 袋子（前后两片缝成的立体）在场景里放哪：anchor 是裁片外接框的哪个点放到 (x,y)；单位和头一致，1 个图纸像素 = UNIT_PER_PX */
 const PILLOWS = {
+  head: { x: 0, y: 2.0, anchor: 'center', z: 0, mirrorBack: true },
   body: { x: 0, y: 0.78, anchor: 'top', z: 0, mirrorBack: true },
   // 手臂：D 形片带编号的那条直边（图纸上朝外的那条）缝在身体前/后片的侧边上，所以左边那一列的 D 片是画面右边的手
   armL: { attach: 'body', sign: 1, anchor: 'top', z: 0 },
@@ -77,11 +87,11 @@ function makeDoc(tpl, opts = {}) {
     const role = ROLE_KEYS.includes(roles[p.id]) ? roles[p.id] : p.role || 'none';
     const material = materials[p.id] === 'hair' || materials[p.id] === 'skin' ? materials[p.id] : ROLES[role].material;
     const box = boxOfPoly(poly);
-    return { id: p.id, index: i, label: labelOf(i), name: p.name, role, material, poly, box, area: areaOfPoly(poly), partner: (tpl.pairs || {})[p.id] || null, axis: box.x + box.w / 2, pxPerDeg: tpl.faceWidthPx / 2 / ROLES.face.alpha, faceWidthPx: tpl.faceWidthPx, edges: edgesOf(poly, box), rows: rowsOf(poly, box) };
+    return { id: p.id, index: i, label: labelOf(i), name: p.name, role, material, poly, box, area: areaOfPoly(poly), partner: (tpl.pairs || {})[p.id] || null, axis: box.x + box.w / 2, pxPerDeg: tpl.faceWidthPx / 2 / ROLES.face.alpha, faceWidthPx: tpl.faceWidthPx, edges: edgesOf(poly, box), rows: rowsOf(poly, box), place: p.place || null, anchorPx: p.anchorPx || null, heightPoly: p.heightPoly || null };
   });
   const head = headModel(pieces);
   for (const p of pieces) p.head = head;
-  return { id: tpl.id, name: tpl.name, w: tpl.w, h: tpl.h, axis: tpl.axis, faceWidthPx: tpl.faceWidthPx, scaleLabel: tpl.scaleLabel || '脸片宽度', imported: !!tpl.imported, pieces, head, guides: tpl.guides || null, byId: Object.fromEntries(pieces.map((p) => [p.id, p])) };
+  return { id: tpl.id, name: tpl.name, w: tpl.w, h: tpl.h, axis: tpl.axis, faceWidthPx: tpl.faceWidthPx, scaleLabel: tpl.scaleLabel || '脸片宽度', imported: !!tpl.imported, flat: !!tpl.flat, pieces, head, guides: tpl.guides || null, byId: Object.fromEntries(pieces.map((p) => [p.id, p])) };
 }
 function labelOf(i) { return i < 20 ? String.fromCharCode(0x2460 + i) : `(${i + 1})`; }
 
@@ -183,6 +193,7 @@ function backDir(piece, x, y) {
 /** 裁片上的一点 → 单位方向（在它所属部件的椭球上）；这一片没有用途就返回 null。脸片这种圆盖用「方位等距」，圆贴上去还是圆 */
 function pieceDir(piece, x, y) {
   if (piece.role === 'board') {
+    if (piece.flat) return null;
     if (piece.board === 'front') return capDir(piece, x, y, BOARD_CAP);
     if (piece.board === 'back') return backDir(piece, x, y);
     return null;
@@ -237,7 +248,8 @@ function attachedAt(base, piece, doc, k) {
     if (xs.length) half = ((Math.max(...xs) - Math.min(...xs)) / 2) * k;
   }
   const drop = body ? bodyBox.h * 0.12 * k : 0.2;
-  return { x: base.sign * (half + (b.w / 2) * k * 0.85), y: top - drop, anchor: base.anchor, z: base.z };
+  const anchor = (piece.place && piece.place.anchor) || base.anchor;
+  return { x: base.sign * (half + (b.w / 2) * k * 0.85), y: top - drop - (anchor === 'center' ? (b.h / 2) * k : 0), anchor, z: base.z };
 }
 
 /** 袋子的网格：把一片裁片「充气」成立体的一面。离边越远鼓得越高（圆边），边上高度 0，所以前片和后片在轮廓上正好缝在一起。
@@ -246,19 +258,22 @@ function pillowMesh(piece, doc) {
   const role = ROLES[piece.role], base = role && PILLOWS[role.group];
   if (!base) return null;
   const b = piece.box, k = unitPerPx(piece), side = role.side, mx = base.mirrorBack ? side : 1;
-  const pl = base.attach ? attachedAt(base, piece, doc, k) : base;
+  let pl = base.attach ? attachedAt(base, piece, doc, k) : base;
+  if (piece.place) pl = { ...pl, ...piece.place };
   const g = Math.max(2, Math.min(b.w, b.h) / 28), nx = Math.ceil(b.w / g) + 2, ny = Math.ceil(b.h / g) + 2;
-  const x0 = b.x - g, y0 = b.y - g;
-  const pad = 2, { bm } = Shape.rasterizePolygon(piece.poly, 1, pad);
-  const inside = (x, y) => { const ix = Math.floor(x - b.x + pad + 1), iy = Math.floor(y - b.y + pad + 1); return ix >= 0 && iy >= 0 && ix < bm.w && iy < bm.h && bm.data[iy * bm.w + ix] === 1; };
-  const out = new Uint8Array(bm.w * bm.h);
-  for (let i = 0; i < out.length; i++) out[i] = bm.data[i] ? 0 : 1;
-  const dist = Shape.distanceTo(out, bm.w, bm.h);
-  const R = PILLOW_ROUND * Math.min(b.w, b.h);
+  const x0 = b.x - g, y0 = b.y - g, pad = 2;
+  const own = Shape.rasterizePolygon(piece.poly, 1, pad).bm;
+  const inside = (x, y) => { const ix = Math.floor(x - b.x + pad + 1), iy = Math.floor(y - b.y + pad + 1); return ix >= 0 && iy >= 0 && ix < own.w && iy < own.h && own.data[iy * own.w + ix] === 1; };
+  // 鼓起的高度按「整个轮廓」算：后脑左右两半缝在一起以后是连续的一个面，不能在缝上凹下去（heightPoly 是和这一片同坐标的整个轮廓）
+  const hb = piece.heightPoly ? boxOfPoly(piece.heightPoly) : b, hr = piece.heightPoly ? Shape.rasterizePolygon(piece.heightPoly, 1, pad).bm : own;
+  const out = new Uint8Array(hr.w * hr.h);
+  for (let i = 0; i < out.length; i++) out[i] = hr.data[i] ? 0 : 1;
+  const dist = Shape.distanceTo(out, hr.w, hr.h);
+  const R = PILLOW_ROUND * Math.min(hb.w, hb.h);
   const heightAt = (x, y) => {
-    const ix = Math.round(x - b.x + pad + 1), iy = Math.round(y - b.y + pad + 1);
-    if (ix < 0 || iy < 0 || ix >= bm.w || iy >= bm.h || !bm.data[iy * bm.w + ix]) return 0;
-    const d = Math.min(R, dist[iy * bm.w + ix]);
+    const ix = Math.round(x - hb.x + pad + 1), iy = Math.round(y - hb.y + pad + 1);
+    if (ix < 0 || iy < 0 || ix >= hr.w || iy >= hr.h || !hr.data[iy * hr.w + ix]) return 0;
+    const d = Math.min(R, dist[iy * hr.w + ix]);
     return Math.sqrt(Math.max(0, R * R - (R - d) * (R - d)));
   };
   // 格子里有一点在片里面，这个格子就要
@@ -269,12 +284,15 @@ function pillowMesh(piece, doc) {
     active[j * nx + i] = hit ? 1 : 0;
   }
   const idxOf = new Int32Array((nx + 1) * (ny + 1)).fill(-1), pos = [], uv = [], idx = [];
-  const ax = b.x + b.w / 2, ay = pl.anchor === 'top' ? b.y : b.y + b.h / 2;
+  // 图纸上的哪一点放到 (pl.x, pl.y)：模板可以直接给（anchorPx），否则取外接框的上边中点 / 下边中点 / 中心
+  const ax = piece.anchorPx ? piece.anchorPx[0] : b.x + b.w / 2;
+  const ay = piece.anchorPx ? piece.anchorPx[1] : pl.anchor === 'top' ? b.y : pl.anchor === 'bottom' ? b.y + b.h : b.y + b.h / 2;
+  const rot = pl.rot || 0, cr = Math.cos(rot), sr = Math.sin(rot), lift = role.lift || 0;
   const vert = (i, j) => {
     const key = j * (nx + 1) + i;
     if (idxOf[key] >= 0) return idxOf[key];
-    const x = x0 + i * g, y = y0 + j * g;
-    pos.push(pl.x + (x - ax) * k * mx, pl.y - (y - ay) * k, pl.z + side * heightAt(x, y) * k);
+    const x = x0 + i * g, y = y0 + j * g, dx = (x - ax) * k * mx, dy = -(y - ay) * k;
+    pos.push(pl.x + dx * cr - dy * sr, pl.y + dx * sr + dy * cr, pl.z + side * (heightAt(x, y) * k + lift));
     uv.push((x - b.x) / b.w, (y - b.y) / b.h);
     return (idxOf[key] = pos.length / 3 - 1);
   };
@@ -295,7 +313,7 @@ function layerRule(piece, layer) {
   // 发片画板：不是裁片，是一块自由画布；画在上面的每一块颜色自动变成黏在头顶的发片
   if (piece.role === 'board') return layer === 'hair' ? { ok: true } : { ok: false, reason: '发片画板只能画发片：先切到「发片」层。' };
   if (layer === 'face') {
-    if (piece.role !== 'face') return { ok: false, reason: `「脸」只能画在脸片上（${piece.name}不是脸片）。` };
+    if (!isFace(piece)) return { ok: false, reason: `「脸」只能画在脸片上（${piece.name}不是脸片）。` };
     return { ok: true };
   }
   if (layer === 'skin') {
@@ -303,7 +321,7 @@ function layerRule(piece, layer) {
     return { ok: true };
   }
   // 后发（头顶发、后脑）是缝上去的发片布；前发直接做成贴布贴在脸片的额头上，所以脸片的额头那一块也能画发片
-  if (piece.role === 'face') return { ok: false, reason: '前发不直接画在脸片上，它是脑袋上面另起的一层：把「发片画在」选成「前发」，画在前发发片画板上（3D 上也能直接画）。' };
+  if (isFace(piece)) return { ok: false, reason: '前发不直接画在脸片上，它是脑袋上面另起的一层：把「发片画在」选成「前发」，画在前发发片画板上（3D 上也能直接画）。' };
   if (piece.material !== 'hair') return { ok: false, reason: `${piece.name}是肤色布，不是发片。「发片」层的「底布」只能涂在头顶发、后脑这类发片布裁片上；前发、后发、上面的发片请选对应的画板。` };
   return { ok: true };
 }
@@ -403,13 +421,33 @@ function templateFromPieces(id, name, pieces, w, h) {
   return { id, name, w, h, axis, faceWidthPx: widest, imported: true, scaleLabel: '最大一片的宽度', pieces: list.map(({ id: pid, name: pn, role, poly }) => ({ id: pid, name: pn, role, poly })), pairs: findPairs(list, axis, w, h), guides: null };
 }
 
+/** 扁平头的三块发片画板：前发 = 脸片的轮廓搬过来（同形同位置，3D 上是贴在脸片前面再凸一点的一层），后发 = 后脑整个轮廓，上面 = 自由画布 */
+function makeBoardsFlat(doc) {
+  const face = doc.pieces.find(isFace), back = doc.pieces.find((p) => p.role === 'headBackL' || p.role === 'headBackR');
+  const gap = 30, x0 = doc.w + 30, y0 = 24, shift = (poly, dx, dy) => poly.map(([x, y]) => [x + dx, y + dy]);
+  const mk = (id, kind, name, poly, extra) => { const bx = boxOfPoly(poly); return { id, index: -1, label: '板', name, role: 'board', board: kind, flat: true, material: 'skin', poly, box: bx, area: bx.w * bx.h, partner: null, axis: bx.x + bx.w / 2, pxPerDeg: 1, faceWidthPx: doc.faceWidthPx, edges: null, rows: null, head: doc.head, ...extra }; };
+  const fb = face.box, fdx = x0 - fb.x, fdy = y0 - fb.y;
+  const front = mk('board-front', 'front', '前发发片', shift(face.poly, fdx, fdy), { shiftBy: [fdx, fdy], anchorPx: [face.anchorPx[0] + fdx, face.anchorPx[1] + fdy], place: face.place, shellRole: 'hairFlatFront' });
+  const topW = 480, topH = 260, ty = y0 + fb.h + gap;
+  const top = mk('board-top', 'top', '上面发片', [[x0, ty], [x0 + topW, ty], [x0 + topW, ty + topH], [x0, ty + topH]], {});
+  const bx = x0 + Math.max(fb.w, topW) + gap;
+  let backB = null;
+  if (back) {
+    const full = back.heightPoly || back.poly, hb = boxOfPoly(full), bdx = bx - hb.x, bdy = y0 - hb.y;
+    backB = mk('board-back', 'back', '后发发片', shift(full, bdx, bdy), { shiftBy: [bdx, bdy], anchorPx: [back.anchorPx[0] + bdx, back.anchorPx[1] + bdy], place: back.place, shellRole: 'hairFlatBack' });
+  } else backB = mk('board-back', 'back', '后发发片', [[bx, y0], [bx + 480, y0], [bx + 480, y0 + 380], [bx, y0 + 380]], {});
+  const boards = [front, backB, top], bw = Math.max(backB.box.w, 360);
+  return { boards, strip: { x: bx, y: y0 + backB.box.h + gap, w: bw }, w: bx + bw + gap, h: Math.max(top.box.y + topH, y0 + backB.box.h) + gap };
+}
+
 /** 三块发片画板（图样右边的空白区）。发片都是脑袋上面另起的一层，不是裁片，所以 role 是 board：
  *  前发：一个圆盘，中心朝正前，比脸盖大一圈（盖到 76°），上面描着脸盖和发际线当参考；贴在 3D 脑袋前面的一层
  *  后发：后脑展开的长方形，左右两半各对一片后脑，黄边在正中；贴在 3D 脑袋后面的一层
  *  上面：一块自由画布，画翘出脑袋的发片，黏在头顶
  * 返回 { boards:[…], strip:{x,y,w}, w, h }：strip 是画出来的发片裁片排版的起点 */
 function makeBoards(doc) {
-  const k = BOARD_CAP / ROLES.face.alpha, face = doc.pieces.find((p) => p.role === 'face');
+  if (doc.flat) return makeBoardsFlat(doc);
+  const k = BOARD_CAP / ROLES.face.alpha, face = doc.pieces.find(isFace);
   const fc = face ? capOf(face) : { cx: 585, cy: 300, rx: 160.7, ry: 153.9 };
   const rx = fc.rx * k, ry = fc.ry * k, gap = 30, x0 = doc.w + 30, y0 = 24;
   const make = (id, kind, name, x, y, w, h, poly, extra = {}) => ({ id, index: -1, label: '板', name, role: 'board', board: kind, material: 'skin', poly, box: { x, y, w, h }, area: w * h, partner: null, axis: x + w / 2, pxPerDeg: 1, faceWidthPx: doc.faceWidthPx, edges: null, rows: null, head: doc.head, ...extra });
@@ -504,9 +542,9 @@ function checks(doc, stats, ctx = {}) {
   let bad = false;
   for (const p of doc.pieces) {
     const st = stats[p.id] || {};
-    if (p.material === 'skin' && p.role !== 'face' && (st.hairInk || 0) > 0) { bad = true; add('error', `备料错误：${p.label} ${p.name}是肤色布，上面却有发片的颜色。把它的布改成「发片布」，或擦掉这些颜色。`); }
+    if (p.material === 'skin' && !isFace(p) && (st.hairInk || 0) > 0) { bad = true; add('error', `备料错误：${p.label} ${p.name}是肤色布，上面却有发片的颜色。把它的布改成「发片布」，或擦掉这些颜色。`); }
     if (p.material === 'hair' && ((st.faceInk || 0) > 0 || (st.paintInk || 0) > 0)) { bad = true; add('error', `备料错误：${p.label} ${p.name}是发片布，上面却有脸或彩绘。发片布不能绣脸。`); }
-    if (p.role !== 'face' && p.material !== 'hair' && (st.faceInk || 0) > 0) { bad = true; add('error', `${p.label} ${p.name}不是脸片，却有脸的笔画。`); }
+    if (!isFace(p) && p.material !== 'hair' && (st.faceInk || 0) > 0) { bad = true; add('error', `${p.label} ${p.name}不是脸片，却有脸的笔画。`); }
   }
   for (const p of doc.pieces.filter((q) => q.material === 'hair')) {
     const st = stats[p.id] || {}, cov = st.coverage || 0;
@@ -522,7 +560,7 @@ function checks(doc, stats, ctx = {}) {
     const a = stats[p.id], b = stats[q.id];
     if (a && b && a.colors && b.colors && a.colors[0] && b.colors[0] && colorDist(a.colors[0].hex, b.colors[0].hex) > 60) add('warn', `${p.name}和${q.name}主色不一样，是故意的吗？`);
   }
-  const face = doc.pieces.find((p) => p.role === 'face');
+  const face = doc.pieces.find(isFace);
   if (face) {
     const st = stats[face.id] || {};
     if (st.hairAreaPx > 0 && (st.colors || []).length > 2) add('warn', `前发（脸片额头）用了 ${st.colors.length} 种颜色：每种都要单独剪一块贴布，贴起来会很碎。`);
@@ -545,7 +583,7 @@ function checks(doc, stats, ctx = {}) {
 }
 
 const api = {
-  TAU, ROLES, ROLE_KEYS, TARGETS, PILLOWS, PILLOW_ROUND, unitPerPx, LAYERS, LAYER_NAMES, FABRIC_WIDTH_CM,
+  TAU, ROLES, ROLE_KEYS, isFace, TARGETS, PILLOWS, PILLOW_ROUND, unitPerPx, LAYERS, LAYER_NAMES, FABRIC_WIDTH_CM,
   inPoly, boxOfPoly, areaOfPoly, smoothPoly, makeDoc, labelOf, mirrorOf,
   pieceDir, capOf, dirOf, targetPoint, targetNormal, pillowMesh,
   layerRule, buildZone, zoneAt, zoneLoops, segmentPieces, findPairs, templateFromPieces, maskToPolys, polyThickness, packStrip, makeBoards, capDir, backDir, BOARD_CAP,
