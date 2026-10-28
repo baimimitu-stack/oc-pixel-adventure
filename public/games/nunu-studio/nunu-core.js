@@ -276,6 +276,8 @@ const LAYER_NAMES = { face: '脸', skin: '彩绘', hair: '发片' };
 
 /** 这一层能不能画在这一片上（只看层和布，不看位置） */
 function layerRule(piece, layer) {
+  // 发片画板：不是裁片，是一块自由画布；画在上面的每一块颜色自动变成黏在头顶的发片
+  if (piece.role === 'board') return layer === 'hair' ? { ok: true } : { ok: false, reason: '发片画板只能画发片：先切到「发片」层。' };
   if (layer === 'face') {
     if (piece.role !== 'face') return { ok: false, reason: `「脸」只能画在脸片上（${piece.name}不是脸片）。` };
     return { ok: true };
@@ -392,6 +394,12 @@ function templateFromPieces(id, name, pieces, w, h) {
   const axis = w / 2;
   const widest = Math.max(...list.map((p) => p.box.w));
   return { id, name, w, h, axis, faceWidthPx: widest, imported: true, scaleLabel: '最大一片的宽度', pieces: list.map(({ id: pid, name: pn, role, poly }) => ({ id: pid, name: pn, role, poly })), pairs: findPairs(list, axis, w, h), guides: null };
+}
+
+/** 发片画板：图样右边的一块空白画布（图纸像素），自由画发片形状；它不是裁片，所以 role 是 board */
+function makeBoardPiece(x, y, w, h) {
+  const poly = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]], box = { x, y, w, h };
+  return { id: 'board', index: -1, label: '板', name: '发片画板', role: 'board', material: 'skin', poly, box, area: w * h, partner: null, axis: x + w / 2, pxPerDeg: 1, faceWidthPx: 0, edges: null, rows: null, head: null };
 }
 
 /** 画布分辨率的位图（1 = 画了）→ 一块块的轮廓（图纸坐标）。box 是这张位图对应的图纸范围 */
@@ -520,7 +528,7 @@ const api = {
   TAU, ROLES, ROLE_KEYS, TARGETS, PILLOWS, PILLOW_ROUND, unitPerPx, LAYERS, LAYER_NAMES, FABRIC_WIDTH_CM,
   inPoly, boxOfPoly, areaOfPoly, smoothPoly, makeDoc, labelOf, mirrorOf,
   pieceDir, capOf, dirOf, targetPoint, targetNormal, pillowMesh,
-  layerRule, buildZone, zoneAt, zoneLoops, segmentPieces, findPairs, templateFromPieces, maskToPolys, polyThickness, packStrip,
+  layerRule, buildZone, zoneAt, zoneLoops, segmentPieces, findPairs, templateFromPieces, maskToPolys, polyThickness, packStrip, makeBoardPiece,
   mmPerPx, px2cm2, bom, checks, colorDist,
 };
 root.NunuCore = api;

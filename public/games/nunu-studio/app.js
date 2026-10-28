@@ -37,7 +37,7 @@ const allTemplates = () => [P.public, ...imports];
 const tplById = (id) => allTemplates().find((t) => t.id === id) || P.public;
 const td = () => (state.tplData[state.template] ||= { roles: {}, materials: {}, strokes: [], cut: {} });
 
-let doc = null;
+let doc = null, boardPiece = null;
 const rt = {}; // 每片的运行时：图层画布、合成画布、遮罩、区域缓存
 const mm = () => C.mmPerPx(doc, state.faceMm);
 const guardPx = () => (ui.seamGuard ? state.guardMm / mm() : 0);
@@ -53,6 +53,11 @@ function buildDoc(keepRuntime) {
     if (r && r.sig !== sigOf(p)) delete rt[p.id];
   }
   for (const p of doc.pieces) ensureRt(p);
+  // 发片画板：放在图样右边的空白处，不是裁片
+  boardPiece = C.makeBoardPiece(doc.w + 30, 24, 520, 300);
+  if (rt.board && rt.board.sig !== sigOf(boardPiece)) delete rt.board;
+  doc.byId.board = boardPiece;
+  ensureRt(boardPiece);
   cutCache.clear();
 }
 const sigOf = (p) => `${p.box.x.toFixed(1)},${p.box.y.toFixed(1)},${p.box.w.toFixed(1)},${p.box.h.toFixed(1)},${p.poly.length}`;
@@ -101,7 +106,7 @@ function updateHint() {
   h.textContent = {
     face: `脸：只能画在脸片的脸窗里（蓝色虚线框住的那块）${g}。额头、边上点了也画不上。`,
     skin: `彩绘：腮红、花纹，画在肤色布的裁片上${g}。发片布不画彩绘。`,
-    hair: '画发片的方法：① 后发（头顶发、后脑）先用大笔刷把底色涂满；② 前发画在脸片额头那一块（蓝色弧线以上）；③ 想要一缕一缕的，就在上面用别的颜色画出形状；④ 每一块颜色会自动变成一片发片裁片，出现在图样右边的空白处，带缝份，备料里按颜色算布。画错了用橡皮擦。',
+    hair: '画发片的方法：① 后发（头顶发、后脑）先用大笔刷把底色涂满；② 前发画在脸片额头那一块（蓝色弧线以上）；③ 想要一缕一缕的，就在上面用别的颜色画出形状；④ 每一块颜色会自动变成一片发片裁片，出现在图样右边的空白处，带缝份，备料里按颜色算布。要翘出脑袋外面的发片（刺猬头那种）：在图样右边的「发片画板」上自由画，画好的每一块会黏在头顶，3D 上立在头上。画错了用橡皮擦。',
   }[ui.layer] + info;
 }
 
@@ -123,6 +128,8 @@ function pointCheck(p, layer, x, y, erase) {
   if (!C.inPoly(p.poly, x, y)) return { ok: false, reason: '', quiet: true };
   if (erase) return { ok: true };
   if (C.zoneAt(zoneOf(p, layer).zone, x, y)) return { ok: true };
+  // 发片布整片都能涂：在多边形里却被区域挡住，只是边缘差一个像素，不用提示
+  if (layer === 'hair' && p.material === 'hair') return { ok: false, reason: '', quiet: true };
   if (layer === 'face') return { ok: false, reason: '脸只能画在脸窗里（蓝色虚线框住的那块），额头和边上不行。' };
   if (layer === 'hair' && p.role === 'face') return { ok: false, reason: '前发只能画在额头上（蓝色虚线弧线以上）。弧线以下是脸窗，留给眼睛和嘴。' };
   return { ok: false, reason: `离缝线太近了（要留 ${state.guardMm} mm 缝份），往里一点。` };
@@ -158,7 +165,7 @@ function replayLayer(p, layer) {
   cv.getContext('2d').clearRect(0, 0, cv.width, cv.height);
   for (const st of list) if (st.pts.length >= 2) paintStroke(p, layer, st, 0);
 }
-function replayAll() { for (const p of doc.pieces) for (const l of C.LAYERS) replayLayer(p, l); }
+function replayAll() { for (const p of [...doc.pieces, boardPiece]) for (const l of C.LAYERS) replayLayer(p, l); }
 
 const history = [], redoStack = [];
 let cur = null;
@@ -254,7 +261,7 @@ function compose(p) {
   applyTf(c, p);
   c.save();
   c.clip(r.poly2d);
-  c.fillStyle = p.material === 'hair' ? '#ece7dc' : state.skin;
+  c.fillStyle = p.role === 'board' ? '#fbfaf3' : p.material === 'hair' ? '#ece7dc' : state.skin;
   c.fillRect(p.box.x - 2, p.box.y - 2, p.box.w + 4, p.box.h + 4);
   for (const l of ['skin', 'face', 'hair']) if (r.layers[l]) c.drawImage(r.layers[l], p.box.x, p.box.y, p.box.w, p.box.h);
   if (ui.guides && p.role === 'face' && doc.guides) {
@@ -390,20 +397,23 @@ function computeStats() {
     } else { st.coverage = 0; st.colors = []; }
     out[p.id] = st;
   }
+  const bh = scanLayer(boardPiece, 'hair');
+  if (bh) for (const d of deriveHair(boardPiece, bh, { coverage: 0, colors: dominantColors(bh.buckets, bh.sampled) })) found.push({ ...d, piece: boardPiece });
   stats = out;
   // 画出来的发片：量大小、放缝份、排到图样右边的空白区
   const k = mm(), seamPx = state.seamMm / k, counter = {};
   derived = found.map((d, i) => {
     const n = (counter[d.from] = (counter[d.from] || 0) + 1), cut = cutOfPoly(d.poly, seamPx), area = C.areaOfPoly(d.poly);
-    const name = d.piece.role === 'face' ? `前发 ${n}` : `${d.piece.name}发片 ${n}`;
-    return { id: `${d.from}.hair.${i}`, from: d.from, label: `发${i + 1}`, name, hex: d.hex, poly: d.poly, cut: cut, areaPx: area, areaMm2: area * k * k, thicknessMm: C.polyThickness(d.poly) * k, cutAreaPx: C.areaOfPoly(cut), box: C.boxOfPoly(d.poly), cutBox: C.boxOfPoly(cut), dx: 0, dy: 0 };
+    const name = d.piece.role === 'face' ? `前发 ${n}` : d.piece.role === 'board' ? `头顶发片 ${n}` : `${d.piece.name}发片 ${n}`;
+    return { id: `${d.from}.hair.${i}`, from: d.from, label: `发${i + 1}`, name, hex: d.hex, poly: d.poly, cut: cut, areaPx: area, areaMm2: area * k * k, thicknessMm: C.polyThickness(d.poly) * k, cutAreaPx: C.areaOfPoly(cut), box: C.boxOfPoly(d.poly), cutBox: C.boxOfPoly(cut), dx: 0, dy: 0, top: d.piece.role === 'board' };
   });
-  const pack = C.packStrip(derived.map((d) => ({ id: d.id, box: d.cutBox })), doc.w + 30, 24, 520);
+  const bb = boardPiece.box, pack = C.packStrip(derived.map((d) => ({ id: d.id, box: d.cutBox })), doc.w + 30, bb.y + bb.h + 30, 520);
   for (const d of derived) Object.assign(d, pack.pos[d.id]);
-  const next = derived.length ? { w: Math.max(doc.w, pack.w + 30), h: Math.max(doc.h, pack.h + 24) } : { w: doc.w, h: doc.h };
+  const next = { w: Math.max(doc.w, bb.x + bb.w + 30, derived.length ? pack.w + 30 : 0), h: Math.max(doc.h, bb.y + bb.h + 30, derived.length ? pack.h + 24 : 0) };
   const changed = next.w !== ext.w || next.h !== ext.h;
   ext = next;
   if (sheet) { sheet.setExtent(ext.w, ext.h); if (changed) sheet.fit(); markSheet(); }
+  if (model) { model.setCards(derived.filter((d) => d.top), bb, C.unitPerPx({ faceWidthPx: doc.faceWidthPx })); dirty.scene = true; schedule(); }
   computeReport();
 }
 function scheduleStats() { clearTimeout(statsTimer); statsTimer = setTimeout(computeStats, 260); }
@@ -427,7 +437,7 @@ const dirty = { pieces: new Set(), sheet: true, scene: true };
 let frameReq = 0;
 function schedule() { if (!frameReq) frameReq = requestAnimationFrame(frame); }
 function markPiece(id) { dirty.pieces.add(id); dirty.sheet = true; dirty.scene = true; schedule(); }
-function markAll() { for (const p of doc.pieces) dirty.pieces.add(p.id); dirty.sheet = true; dirty.scene = true; schedule(); }
+function markAll() { for (const p of [...doc.pieces, boardPiece]) dirty.pieces.add(p.id); dirty.sheet = true; dirty.scene = true; schedule(); }
 function markSheet() { dirty.sheet = true; schedule(); }
 function frame() {
   frameReq = 0;
@@ -437,7 +447,7 @@ function frame() {
   if (dirty.scene && model) { model.render(); dirty.scene = false; }
 }
 function sheetEnv(clean) {
-  return { comps: Object.fromEntries(doc.pieces.map((p) => [p.id, { canvas: rt[p.id].comp }])), cutPolys: cutMap(), showCut: true, showSeams: ui.seams, mm: mm(), selectedId: clean ? '' : ui.selected, hoverId: clean ? '' : ui.hover, extra: derived };
+  return { comps: Object.fromEntries(doc.pieces.map((p) => [p.id, { canvas: rt[p.id].comp }])), cutPolys: cutMap(), showCut: true, showSeams: ui.seams, mm: mm(), selectedId: clean ? '' : ui.selected, hoverId: clean ? '' : ui.hover, extra: derived, board: { box: boardPiece.box, canvas: rt.board.comp } };
 }
 
 /* ============ 图样交互 ============ */
@@ -469,8 +479,10 @@ function setupSheet() {
     if (ptrs.size === 2) { endStroke(); pan = null; const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 }; return; }
     if (e.button === 1 || e.button === 2 || spaceDown) { pan = { x: e.clientX, y: e.clientY }; return; }
     if (e.button !== 0) return;
-    const hit = sheet.pieceAt(e.clientX, e.clientY, cutMap());
+    const sp = sheet.toSheet(e.clientX, e.clientY), bb = boardPiece.box;
+    let hit = sp.x >= bb.x && sp.x <= bb.x + bb.w && sp.y >= bb.y && sp.y <= bb.y + bb.h ? { piece: boardPiece, local: { x: sp.x, y: sp.y }, inSew: true } : sheet.pieceAt(e.clientX, e.clientY, cutMap());
     if (!hit) { selectPiece(''); return; }
+    if (hit.piece === boardPiece && ui.layer !== 'hair') { $('[data-layer="hair"]').click(); toast('发片画板只能画发片，已切到「发片」层'); }
     selectPiece(hit.piece.id);
     if (!hit.inSew) { toast('这是缝份的位置（裁剪线和缝线之间），不能画。往里一点。', true); return; }
     startStroke('sheet', ui.layer);
@@ -634,7 +646,7 @@ function exportSvg() {
 function withCleanView(fn) {
   const keep = { zones: ui.zones, selected: ui.selected };
   ui.zones = false; ui.selected = '';
-  for (const p of doc.pieces) compose(p);
+  for (const p of [...doc.pieces, boardPiece]) compose(p);
   try { return fn(); } finally {
     ui.zones = keep.zones; ui.selected = keep.selected;
     markAll();
@@ -776,8 +788,8 @@ function wireDock() {
   if (clear) clear.onclick = () => {
     if (!confirm('清空这份图纸上所有笔迹？这一步撤销不了。')) return;
     td().strokes = []; history.length = 0; redoStack.length = 0;
-    for (const p of doc.pieces) { const r = rt[p.id]; r.layers = {}; }
-    markAll(); computeStats(); scheduleSave(); renderDock();
+    for (const p of [...doc.pieces, boardPiece]) { const r = rt[p.id]; r.layers = {}; }
+    markAll(); markPiece('board'); computeStats(); scheduleSave(); renderDock();
   };
   $$('#dockBody [data-tpl]').forEach((b) => { b.onclick = () => { if (state.template !== b.dataset.tpl) switchTemplate(b.dataset.tpl); }; });
   const imp = $('#importBtn');
@@ -877,7 +889,7 @@ function init() {
   syncTool();
   setupSheet();
   setupModel();
-  for (const p of doc.pieces) compose(p);
+  for (const p of [...doc.pieces, boardPiece]) compose(p);
   computeStats();
   updateHint();
   sheet.fit();

@@ -347,3 +347,18 @@ test('画出来的发片：位图 → 一块块轮廓（图纸坐标）；太细
   assert.ok(warn.some((x) => x.level === 'warn' && /发4/.test(x.text) && /太小/.test(x.text)));
   assert.ok(!warn.some((x) => /发5/.test(x.text)));
 });
+
+test('发片画板：不是裁片，只能画发片；画板上的每块颜色是黏在头顶的发片', () => {
+  const b = C.makeBoardPiece(1200, 24, 520, 300);
+  assert.equal(b.role, 'board');
+  assert.equal(C.layerRule(b, 'hair').ok, true);
+  assert.equal(C.layerRule(b, 'face').ok, false);
+  assert.equal(C.layerRule(b, 'skin').ok, false);
+  assert.match(C.layerRule(b, 'skin').reason, /发片/);
+  const z = C.buildZone(doc(), b, 'hair', 12);
+  assert.equal(C.zoneAt(z, 1210, 30), true, '画板边上也能画');
+  assert.equal(C.zoneAt(z, 1100, 100), false, '画板外面不能画');
+  assert.equal(C.zoneAt(z, 1400, 400), false);
+  const m = C.mirrorOf({ byId: { board: b } }, 'board', 1300, 100);
+  assert.equal(m.pieceId, 'board'); near(m.x, 2 * (1200 + 260) - 1300, 1e-9);
+});

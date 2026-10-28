@@ -98,7 +98,7 @@ function create(canvas) {
     bases.length = 0;
     for (const p of patches.values()) { group.remove(p.mesh); p.mesh.geometry.dispose(); p.tex.dispose(); p.mat.dispose(); }
     patches.clear();
-    skinMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(skinHex), roughness: 0.95, metalness: 0 });
+    skinMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(skinHex).convertSRGBToLinear(), roughness: 0.95, metalness: 0 });
     for (const k of Object.keys(C.TARGETS)) { // 只有头有一个底（光头）；身体、手臂、耳朵完全由裁片自己缝出来
       const m = new THREE.Mesh(ellipsoidGeometry(k), skinMat);
       m.userData.base = k;
@@ -117,7 +117,25 @@ function create(canvas) {
     }
     view.target = C.TARGETS.head.pos[1] - 0.4;
   }
-  function setSkin(hex) { if (skinMat) skinMat.color.set(hex); }
+  /** 头顶的发片：画板上画出来的每一块，做成一张贴在头顶的卡片，底边贴着头、往外翘；左右位置跟它在画板上的位置一致 */
+  const cards = [];
+  function setCards(list, board, unit) {
+    for (const c of cards) { group.remove(c); c.geometry.dispose(); c.material.dispose(); }
+    cards.length = 0;
+    const head = C.TARGETS.head;
+    for (const d of list) {
+      const shape = new THREE.Shape();
+      const ax = d.box.x + d.box.w / 2, ay = d.box.y + d.box.h; // 底边中点贴在头上
+      d.poly.forEach(([x, y], i) => { const px = (x - ax) * unit, py = (ay - y) * unit; if (i) shape.lineTo(px, py); else shape.moveTo(px, py); });
+      const u = Math.max(0, Math.min(1, (ax - board.x) / board.w)), psi = ((160 - 140 * u) * Math.PI) / 180;
+      const mesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshStandardMaterial({ color: new THREE.Color(d.hex).convertSRGBToLinear(), roughness: 0.85, metalness: 0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -1 }));
+      mesh.position.set(head.pos[0] + head.r[0] * 0.97 * Math.cos(psi), head.pos[1] + head.r[1] * 0.97 * Math.sin(psi), 0.15);
+      mesh.rotation.z = psi - Math.PI / 2;
+      group.add(mesh);
+      cards.push(mesh);
+    }
+  }
+  function setSkin(hex) { if (skinMat) skinMat.color.set(hex).convertSRGBToLinear(); }
   function refresh(id) {
     if (id) { const p = patches.get(id); if (p) p.tex.needsUpdate = true; return; }
     for (const p of patches.values()) p.tex.needsUpdate = true;
@@ -156,7 +174,7 @@ function create(canvas) {
   }
   const snapshot = () => { render(); return canvas.toDataURL('image/png'); };
 
-  return { renderer, view, build, setSkin, refresh, resize, render, pick, snapshot };
+  return { renderer, view, build, setSkin, setCards, refresh, resize, render, pick, snapshot };
 }
 
 root.NunuModel = { create, ellipsoidGeometry, patchGeometry };

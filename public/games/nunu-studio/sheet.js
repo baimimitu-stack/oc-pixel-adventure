@@ -173,6 +173,26 @@ function create(canvas, opts = {}) {
     ctx.restore();
   }
 
+  /** 发片画板：一块浅色画布，画在上面的发片会变成黏在头顶的发片裁片 */
+  function drawBoard(b) {
+    const z = 1 / view.zoom, bx = b.box;
+    ctx.save();
+    ctx.fillStyle = '#fbfaf3';
+    ctx.fillRect(bx.x, bx.y, bx.w, bx.h);
+    if (b.canvas) ctx.drawImage(b.canvas, bx.x, bx.y, bx.w, bx.h);
+    ctx.setLineDash([6 * z, 4 * z]);
+    ctx.lineWidth = 1.4 * z;
+    ctx.strokeStyle = '#9fb28a';
+    ctx.strokeRect(bx.x, bx.y, bx.w, bx.h);
+    ctx.setLineDash([]);
+    ctx.font = `600 ${Math.max(9, Math.min(15, 12 * z * 1.1))}px system-ui, "PingFang SC", "Microsoft YaHei", sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#7a8a66';
+    ctx.fillText('发片画板：自由画发片（刺猬头也行），黏在头顶', bx.x + 8, bx.y + 6);
+    ctx.restore();
+  }
+
   function draw(env) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
@@ -188,6 +208,7 @@ function create(canvas, opts = {}) {
     ctx.fillRect(0, 0, e.w, e.h);
     ctx.shadowColor = 'transparent';
     doc.pieces.forEach((p) => drawPiece(env, p));
+    if (env.board) drawBoard(env.board);
     for (const d of env.extra || []) drawExtra(d);
     if (env.showSeams && doc.guides && doc.guides.notches) for (const n of doc.guides.notches) if (doc.byId[n.piece]) notch(n);
     // 校准尺：50 mm
