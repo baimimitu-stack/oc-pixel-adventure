@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>努努赛博定制台 · 图样与裸娃实时联动</title>
 <meta name="description" content="用公开的努努图纸：在图样上画脸，在 3D 裸娃上画发片，两边实时互相投射；自动防止画错地方和备料错误。">
-<link rel="stylesheet" href="style.css?v=15">
+<link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
 <header class="top">
@@ -54,6 +54,7 @@
     <label><input type="checkbox" id="showZones"> 显示不能画的地方</label>
     <label><input type="checkbox" id="showGuides" checked> 眼嘴参考框</label>
     <label><input type="checkbox" id="showSeams" checked> 缝线 / 记号</label>
+    <label title="切到脸 / 发片 / 彩绘层时，图样自动对准要画的那一块"><input type="checkbox" id="autoFocus" checked> 自动聚焦</label>
   </div>
   <div class="group">
     <button type="button" id="undo" title="撤销">↶</button>
@@ -66,10 +67,10 @@
   <section class="panel" id="sheetPanel">
     <div class="panel-head">
       <div><span class="number">01</span><b>图样</b><small>左边是图纸，右边是发片画板；画一笔，3D 立刻跟着变</small></div>
-      <div class="mini"><button type="button" id="viewPattern" title="只看图纸">图纸</button><button type="button" id="viewHair" title="只看发片画板和发片裁片">发片区</button><button type="button" id="zoomOut" aria-label="缩小">−</button><button type="button" id="zoomFit">全部</button><button type="button" id="zoomIn" aria-label="放大">＋</button></div>
+      <div class="mini"><button type="button" id="zoomFit" title="看全部">全局</button><button type="button" id="viewPattern" title="只看图纸">图纸</button><button type="button" id="viewFace" title="只看脸片，画脸用">脸</button><button type="button" id="viewHair" title="只看发片画板，画发片用">发片</button><button type="button" id="handTool" title="手形：按住左键拖动画布（快捷键 H；空白处直接拖也行）">✋ 移动</button><button type="button" id="zoomOut" aria-label="缩小">−</button><button type="button" id="zoomIn" aria-label="放大">＋</button></div>
     </div>
     <div class="stage"><canvas id="sheet" aria-label="图样：每一片裁片，可以直接在上面画"></canvas></div>
-    <p class="caption">实线是缝线，虚线是裁剪线（含缝份），蓝色虚线是脸窗和眼嘴参考框。点一片选中，它在 3D 上会亮起来；右键拖动平移，滚轮缩放。</p>
+    <p class="caption">实线是缝线，虚线是裁剪线（含缝份），蓝色虚线是脸窗和眼嘴参考框。点一片选中，它在 3D 上会亮起来；空白处拖动或右键拖动平移，滚轮缩放，Shift+滚轮左右移动；上面的按钮可以只看脸、只看发片、看全局。</p>
   </section>
   <section class="panel" id="modelPanel">
     <div class="panel-head">
@@ -97,11 +98,11 @@
 <input type="file" id="importFile" accept="image/*" hidden>
 <div id="toast" role="status" aria-live="polite"></div>
 <script src="../ice-cream-latte/three.min.js"></script>
-<script src="nunu-shape.js?v=15"></script>
-<script src="pattern-data.js?v=15"></script>
-<script src="nunu-core.js?v=15"></script>
-<script src="model3d.js?v=15"></script>
-<script src="sheet.js?v=15"></script>
-<script src="app.js?v=15"></script>
+<script src="nunu-shape.js?v=16"></script>
+<script src="pattern-data.js?v=16"></script>
+<script src="nunu-core.js?v=16"></script>
+<script src="model3d.js?v=16"></script>
+<script src="sheet.js?v=16"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>

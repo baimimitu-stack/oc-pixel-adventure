@@ -50,8 +50,8 @@ small { display: block; font-size: 10px; color: var(--muted); }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 24px; background: #fbfaf5; border-bottom: 1px solid var(--line); }
 .group { display: flex; align-items: center; gap: 4px; }
 .group .seg { padding: 7px 12px; }
-.swatches { display: flex; gap: 7px; margin-right: 6px; }
-.swatch { width: 24px; height: 24px; padding: 0; border: 3px solid #fff; box-shadow: 0 0 0 1px #d8d3c4; border-radius: 50%; }
+.swatches { display: flex; flex-wrap: wrap; gap: 4px; margin-right: 6px; max-width: 460px; }
+.swatch { width: 22px; height: 22px; padding: 0; border: 2px solid #fff; box-shadow: 0 0 0 1px #d8d3c4; border-radius: 50%; }
 .swatch.on { box-shadow: 0 0 0 2px #6f8261; }
 .size { display: flex; align-items: center; gap: 6px; font-size: 11px; }
 .size input { width: 90px; }

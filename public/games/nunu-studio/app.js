@@ -17,7 +17,7 @@ const RES = 2; // 每个图纸像素用几个画布像素
 const STORE = 'nunu-v4', IMPORTS = 'nunu-v4-imports';
 const DEFAULTS = {
   version: 4, name: '我的第一只努努', template: 'nunu-public', faceMm: 100, seamMm: 6, guardMm: 3, skin: '#f1dfcd',
-  hairPalette: ['#7d594a', '#d9b99b', '#2f2a2a', '#e7a8a0', '#c9a35c', '#9a7bb5'], tplData: {},
+  hairPalette: [], inkPalette: [], tplData: {},
 };
 function loadState() {
   try {
@@ -29,8 +29,17 @@ function loadState() {
 function loadImports() { try { const l = JSON.parse(localStorage.getItem(IMPORTS)); return Array.isArray(l) ? l : []; } catch { return []; } }
 let state = loadState();
 let imports = loadImports();
-const ui = { layer: 'face', tool: 'pen', ink: '#4b3939', hair: state.hairPalette[0], size: 3, mirror: true, seamGuard: true, zones: false, guides: true, seams: true, paint3d: true, hairTarget: 'front', tab: 'pattern', selected: '', hover: '' };
-const INK = ['#4b3939', '#7a5548', '#e9a3a0', '#f4c7c3', '#fffaf2', '#e45d6f', '#6f8ec8', '#8aa86a'];
+const ui = { layer: 'face', tool: 'pen', ink: '#4b3939', hair: '#7d594a', autoFocus: true, hand: false, size: 3, mirror: true, seamGuard: true, zones: false, guides: true, seams: true, paint3d: true, hairTarget: 'front', tab: 'pattern', selected: '', hover: '' };
+/** 画脸和彩绘用的色板：深色、棕、肤色/腮红、红橙黄、绿、蓝、紫、灰白，一共 35 种 */
+const INK_COLORS = ['#1f1a1a', '#4b3939', '#6b4a3a', '#8a5a44', '#a8734f', '#c99a6b', '#f9d5b8', '#f7b5a0', '#f4c7c3', '#e9a3a0', '#e45d6f', '#c44569',
+  '#d9443a', '#f08a4b', '#f2b84b', '#f4e06b', '#b7d37a', '#8aa86a', '#4f8a5b', '#2f6b5b', '#a8d8f0', '#6f8ec8', '#3f6bb5', '#2b3f8f',
+  '#1f2a5c', '#c9b3e6', '#9a7bb5', '#6b4a96', '#ffffff', '#fffaf2', '#d9d6cf', '#a8a39a', '#6e6a63', '#3a3733', '#000000'];
+/** 发片用的色板：黑灰白、棕、金发、红橙、粉、紫、蓝、绿，一共 36 种 */
+const HAIR_COLORS = ['#1b1b1f', '#2f2a2a', '#474040', '#6e6a6a', '#9a9a9f', '#cfd0d4', '#f2f2f2', '#3b2a24', '#5a3b2e', '#7d594a', '#9b6e4f', '#b58a62',
+  '#c9a35c', '#d9b99b', '#e7d3a1', '#f2e2b3', '#f6ecd0', '#8c2f2f', '#b5443a', '#d9663a', '#e89a4a', '#e7a8a0', '#f2b6c8', '#e86a9a', '#c43d7a',
+  '#9a7bb5', '#6b4a96', '#4a3a7a', '#a8c8e8', '#6f9fd8', '#3f6bb5', '#2a2a4a', '#1f2a5c', '#a8d8b0', '#5fb08a', '#2f7a6a'];
+const hairColors = () => [...HAIR_COLORS, ...state.hairPalette.filter((c) => !HAIR_COLORS.includes(c.toLowerCase()))];
+const inkColors = () => [...INK_COLORS, ...(state.inkPalette || []).filter((c) => !INK_COLORS.includes(c.toLowerCase()))];
 const SKINS = ['#f1dfcd', '#f2d3ce', '#dac4aa', '#d1ddc8', '#d4d9e8'];
 
 const allTemplates = () => [P.public, ...imports];
@@ -108,8 +117,29 @@ const HAIR_HINT = {
   top: '上面发片：翘出脑袋的发片（刺猬头那种）。在图样右边的「上面发片」画板上自由画，每一块颜色变成发片裁片，黏在头顶，3D 上立在头上。',
   base: '底布：头顶发、后脑这两片是缝在脑袋上的发片布，在这里把它们的底色涂满（涂满的主色就是布色）。',
 };
+/** 把图样对准一块区域：脸 → 脸片；发片 → 当前选的那块发片画板（底布则是头顶发和后脑）；彩绘 → 整张图纸；全局 → 全部 */
+function focusRect(kind) {
+  if (!sheet || !doc) return;
+  const pad = 36, fit = (b) => sheet.fitRect(b.x - pad, b.y - pad, b.w + pad * 2, b.h + pad * 2);
+  if (kind === 'all') sheet.fit();
+  else if (kind === 'pattern') sheet.fitRect(0, 0, doc.w, doc.h);
+  else if (kind === 'face') { const f = doc.pieces.find((q) => q.role === 'face'); if (f) fit(f.box); else sheet.fit(); }
+  else if (kind === 'hair') {
+    const bd = boards.find((q) => q.board === ui.hairTarget);
+    if (bd) fit({ x: bd.box.x, y: bd.box.y - 18, w: bd.box.w, h: bd.box.h + 18 });
+    else {
+      const hp = doc.pieces.filter((q) => q.material === 'hair');
+      if (!hp.length) { sheet.fit(); markSheet(); return; }
+      const x0 = Math.min(...hp.map((q) => q.box.x)), y0 = Math.min(...hp.map((q) => q.box.y)), x1 = Math.max(...hp.map((q) => q.box.x + q.box.w)), y1 = Math.max(...hp.map((q) => q.box.y + q.box.h));
+      fit({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+    }
+  }
+  markSheet();
+}
+const focusFor = (layer) => (layer === 'face' ? 'face' : layer === 'hair' ? 'hair' : 'pattern');
 function setHairTarget(t) {
   ui.hairTarget = t;
+  if (ui.autoFocus && ui.layer === 'hair' && sheet) focusRect('hair');
   $$('[data-target]').forEach((x) => x.classList.toggle('on', x.dataset.target === t));
   updateHint();
 }
@@ -412,7 +442,7 @@ function dominantColors(buckets, sampled) {
   }
   const tot = merged.reduce((s, m) => s + m.n, 0) || 1;
   return merged.map((m) => {
-    const pal = state.hairPalette.find((h) => C.colorDist(h, m.hex) < 40);
+    const pal = hairColors().find((h) => C.colorDist(h, m.hex) < 14);
     return { hex: pal ? pal.toLowerCase() : m.hex, frac: m.n / tot };
   });
 }
@@ -527,6 +557,11 @@ function selectPiece(id) {
   updateHint();
   if (ui.tab === 'pattern') highlightRow();
 }
+function setHand(on) {
+  ui.hand = on;
+  $('#handTool').classList.toggle('on', on);
+  $('#sheet').style.cursor = on ? 'grab' : '';
+}
 function setupSheet() {
   const cv = $('#sheet');
   sheet = window.NunuSheet.create(cv);
@@ -537,16 +572,16 @@ function setupSheet() {
   window.addEventListener('keydown', (e) => { if (e.code === 'Space' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) spaceDown = true; });
   window.addEventListener('keyup', (e) => { if (e.code === 'Space') spaceDown = false; });
   cv.addEventListener('contextmenu', (e) => e.preventDefault());
-  cv.addEventListener('wheel', (e) => { e.preventDefault(); sheet.zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX, e.clientY); markSheet(); }, { passive: false });
+  cv.addEventListener('wheel', (e) => { e.preventDefault(); if (e.shiftKey) sheet.pan(-(e.deltaY || e.deltaX), 0); else sheet.zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX, e.clientY); markSheet(); }, { passive: false });
   cv.addEventListener('pointerdown', (e) => {
     capture(cv, e);
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (ptrs.size === 2) { endStroke(); pan = null; const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 }; return; }
-    if (e.button === 1 || e.button === 2 || spaceDown) { pan = { x: e.clientX, y: e.clientY }; return; }
+    if (e.button === 1 || e.button === 2 || spaceDown || ui.hand) { pan = { x: e.clientX, y: e.clientY }; cv.style.cursor = 'grabbing'; return; }
     if (e.button !== 0) return;
     const sp = sheet.toSheet(e.clientX, e.clientY), onBoard = boards.find((b) => sp.x >= b.box.x && sp.x <= b.box.x + b.box.w && sp.y >= b.box.y && sp.y <= b.box.y + b.box.h && C.inPoly(b.poly, sp.x, sp.y));
     const hit = onBoard ? { piece: onBoard, local: { x: sp.x, y: sp.y }, inSew: true } : sheet.pieceAt(e.clientX, e.clientY, cutMap());
-    if (!hit) { selectPiece(''); return; }
+    if (!hit) { selectPiece(''); pan = { x: e.clientX, y: e.clientY }; cv.style.cursor = 'grabbing'; return; }
     if (onBoard) { setHairTarget(onBoard.board); if (ui.layer !== 'hair') { $('[data-layer="hair"]').click(); toast(`${onBoard.name}画板只能画发片，已切到「发片」层`); } }
     selectPiece(hit.piece.id);
     if (!hit.inSew) { toast('这是缝份的位置（裁剪线和缝线之间），不能画。往里一点。', true); return; }
@@ -574,14 +609,16 @@ function setupSheet() {
     const id = hit ? hit.piece.id : '';
     if (id !== ui.hover) { ui.hover = id; markSheet(); }
   });
-  const up = (e) => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; if (!ptrs.size) pan = null; lockPiece = null; endStroke(); };
+  const up = (e) => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; if (!ptrs.size) pan = null; lockPiece = null; cv.style.cursor = ui.hand ? 'grab' : ''; endStroke(); };
   cv.addEventListener('pointerup', up);
   cv.addEventListener('pointercancel', up);
   $('#zoomIn').onclick = () => { sheet.zoomAt(1.25); markSheet(); };
   $('#zoomOut').onclick = () => { sheet.zoomAt(1 / 1.25); markSheet(); };
-  $('#zoomFit').onclick = () => { sheet.fit(); markSheet(); };
-  $('#viewPattern').onclick = () => { sheet.fitRect(0, 0, doc.w, doc.h); markSheet(); };
-  $('#viewHair').onclick = () => { sheet.fitRect(doc.w, 0, Math.max(200, ext.w - doc.w), Math.max(200, ext.h)); markSheet(); };
+  $('#zoomFit').onclick = () => focusRect('all');
+  $('#viewPattern').onclick = () => focusRect('pattern');
+  $('#viewFace').onclick = () => focusRect('face');
+  $('#viewHair').onclick = () => focusRect('hair');
+  $('#handTool').onclick = () => setHand(!ui.hand);
 }
 
 /* ============ 3D 交互 ============ */
@@ -883,7 +920,7 @@ function wireDock() {
 
 /* ============ 工具条 ============ */
 function renderSwatches() {
-  const list = ui.layer === 'hair' ? state.hairPalette : INK;
+  const list = ui.layer === 'hair' ? hairColors() : inkColors();
   const now = ui.layer === 'hair' ? ui.hair : ui.ink;
   $('#swatches').innerHTML = list.map((c) => `<button class="swatch ${c.toLowerCase() === now.toLowerCase() ? 'on' : ''}" data-c="${c}" style="background:${c}" aria-label="颜色 ${c}"></button>`).join('');
   $$('#swatches [data-c]').forEach((b) => { b.onclick = () => setColor(b.dataset.c); });
@@ -892,12 +929,19 @@ function renderSwatches() {
 function setColor(c) {
   if (ui.layer === 'hair') {
     ui.hair = c;
-    if (!state.hairPalette.some((p) => p.toLowerCase() === c.toLowerCase())) {
+    if (!hairColors().some((p) => p.toLowerCase() === c.toLowerCase())) {
       state.hairPalette.push(c);
-      if (state.hairPalette.length > 8) state.hairPalette.shift();
+      if (state.hairPalette.length > 12) state.hairPalette.shift();
       scheduleSave();
     }
-  } else ui.ink = c;
+  } else {
+    ui.ink = c;
+    if (!inkColors().some((p) => p.toLowerCase() === c.toLowerCase())) {
+      (state.inkPalette ||= []).push(c);
+      if (state.inkPalette.length > 12) state.inkPalette.shift();
+      scheduleSave();
+    }
+  }
   ui.tool = 'pen';
   syncTool();
   renderSwatches();
@@ -912,6 +956,7 @@ function setupToolbar() {
       ui.layer = b.dataset.layer;
       $$('[data-layer]').forEach((x) => x.classList.toggle('on', x === b));
       $('#hairTargets').hidden = ui.layer !== 'hair';
+      if (ui.autoFocus) focusRect(focusFor(ui.layer));
       renderSwatches(); updateHint(); if (ui.zones) markAll();
     };
   });
@@ -925,6 +970,7 @@ function setupToolbar() {
   $('#seamGuard').onchange = (e) => { ui.seamGuard = e.target.checked; updateHint(); if (ui.zones) markAll(); if (!ui.seamGuard) toast('接缝保护关了：靠近缝线的笔画会在检查里标出警告', true); };
   $('#showZones').onchange = (e) => { ui.zones = e.target.checked; markAll(); };
   $('#showGuides').onchange = (e) => { ui.guides = e.target.checked; markAll(); };
+  $('#autoFocus').onchange = (e) => { ui.autoFocus = e.target.checked; if (ui.autoFocus) focusRect(focusFor(ui.layer)); };
   $('#showSeams').onchange = (e) => { ui.seams = e.target.checked; markAll(); };
   $('#undo').onclick = undo;
   $('#redo').onclick = redo;
@@ -934,6 +980,7 @@ function setupToolbar() {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
     else if (e.key === 'e' || e.key === 'E') { ui.tool = ui.tool === 'eraser' ? 'pen' : 'eraser'; syncTool(); }
+    else if (e.key === 'h' || e.key === 'H') setHand(!ui.hand);
   });
   $$('.tabs [data-tab]').forEach((b) => {
     b.onclick = () => { ui.tab = b.dataset.tab; $$('.tabs [data-tab]').forEach((x) => x.classList.toggle('on', x === b)); renderDock(); };
