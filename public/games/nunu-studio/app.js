@@ -123,7 +123,9 @@ function pointCheck(p, layer, x, y, erase) {
   if (!C.inPoly(p.poly, x, y)) return { ok: false, reason: '', quiet: true };
   if (erase) return { ok: true };
   if (C.zoneAt(zoneOf(p, layer).zone, x, y)) return { ok: true };
-  return { ok: false, reason: layer === 'face' ? '脸只能画在脸窗里（蓝色虚线框住的那块），额头和边上不行。' : `离缝线太近了（要留 ${state.guardMm} mm 缝份），往里一点。` };
+  if (layer === 'face') return { ok: false, reason: '脸只能画在脸窗里（蓝色虚线框住的那块），额头和边上不行。' };
+  if (layer === 'hair' && p.role === 'face') return { ok: false, reason: '前发只能画在额头上（蓝色虚线弧线以上）。弧线以下是脸窗，留给眼睛和嘴。' };
+  return { ok: false, reason: `离缝线太近了（要留 ${state.guardMm} mm 缝份），往里一点。` };
 }
 
 /* ============ 画笔 ============ */
