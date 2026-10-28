@@ -1,37 +1,844 @@
-const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const defaults={height:20,head:100,body:100,arm:100,leg:100,seam:5,color:'#f0e4ce',colorName:'奶油白',hairColor:'#777551',hair:true,hairLength:80,preset:'圆滚滚',face:'smile',strokes:[],points:[[-85,0],[-58,24],[-26,8],[0,33],[27,8],[57,24],[85,0]],name:'我的第一只努努'};
-let state=structuredClone(defaults);try{const saved=JSON.parse(localStorage.getItem('nunu-v1'));if(saved&&Array.isArray(saved.strokes)&&Array.isArray(saved.points))state={...state,...saved}}catch{}
-let tab='body',view='doll',zoom=1,tool='pen',ink='#665442',brush=3,drawing=null,drag=-1;
-const colors=[['#f0e4ce','奶油白'],['#eac8bc','蜜桃粉'],['#c6b7a0','燕麦棕'],['#c3cdb7','鼠尾草'],['#c5c9d5','雾蓝灰'],['#e4d6b2','布丁黄']];
-function toast(s){$('#toast').textContent=s;$('#toast').classList.add('show');clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),2400)}
-function save(manual=false){try{localStorage.setItem('nunu-v1',JSON.stringify(state));$('#saveStatus').textContent='● 已保存在此浏览器';if(manual)toast('设计已经保存好啦 ✿')}catch{$('#saveStatus').textContent='当前浏览器无法保存';if(manual)toast('保存失败，请检查浏览器存储设置')}}
-function field(key,label,min,max,unit='',ends=['小一点','大一点']){return `<div class="field"><label for="${key}">${label}<output id="o-${key}">${state[key]}${unit}</output></label><input id="${key}" data-param="${key}" type="range" min="${min}" max="${max}" value="${state[key]}"><div class="range-labels"><span>${ends[0]}</span><span>${ends[1]}</span></div></div>`}
-function controls(){let html='';if(tab==='body')html=`<h3>先选一个小小的轮廓</h3><span class="label-en">A SHAPE TO START WITH</span><div class="presets">${['圆滚滚','小长腿','小团子'].map((x,i)=>`<button data-preset="${i}" class="${state.preset===x?'selected':''}"><span class="preset-icon">${['♟','♙','♟'][i]}</span>${x}</button>`).join('')}</div><h3>捏出你的理想体型</h3>${field('height','成品参考高度',10,40,' cm',['10 cm','40 cm'])}${field('head','脑袋大小',75,125,'%',['小巧','圆乎乎'])}${field('body','身体胖瘦',70,130,'%',['纤细','软糯'])}${field('arm','手臂长度',70,130,'%',['短短的','长一点'])}${field('leg','腿部长度',70,140,'%',['小短腿','小长腿'])}<div class="divider"></div><h3>挑一块喜欢的颜色</h3><div class="swatches">${colors.map(([c,n])=>`<button class="swatch ${state.color===c?'selected':''}" style="background:${c}" data-color="${c}" title="${n}" aria-label="${n}"></button>`).join('')}</div><p class="help-text">颜色用于造型预览，纸样以线稿导出。</p>`;
-if(tab==='face')html=`<h3>画上自己的小表情</h3><p class="help-text">直接在预览里的脸上画。画笔会跟着头部尺寸一起缩放。</p><div class="mini-tools"><button data-face="smile">微笑 ◡</button><button data-face="sleep">困困 −</button><button data-face="none">空白脸</button></div><div class="divider"></div><h3>画笔工具</h3><div class="mini-tools"><button id="pen" class="${tool==='pen'?'selected':''}">✎ 画笔</button><button id="eraser" class="${tool==='eraser'?'selected':''}">擦整笔</button><button id="undo">↶ 撤销</button></div><div class="field"><label>画笔颜色<input id="ink" type="color" value="${ink}" aria-label="画笔颜色"></label></div><div class="field"><label>画笔粗细 <output id="brushValue">${brush}</output></label><input id="brush" type="range" min="1" max="12" value="${brush}"></div><button class="wide" id="clearFace">清除手绘笔迹</button><p class="help-text" style="margin-top:16px">脸部图案会出现在头部前片上，可用作刺绣或布用笔描图参考。</p>`;
-if(tab==='hair')html=`<h3>给努努一个新发型</h3><p class="help-text">拖动预览中刘海上的圆点，自由设计发片下缘。</p><div class="mini-tools"><button id="toggleHair">${state.hair?'隐藏发片':'显示发片'}</button><button id="resetHair">重置轮廓</button></div>${field('hairLength','发片长度',40,120,'%',['短刘海','长刘海'])}<div class="field"><label>发片颜色<input id="hairColor" type="color" value="${state.hairColor}" aria-label="发片颜色"></label></div><div class="divider"></div><h3>一片片，拼出喜欢</h3><p class="help-text">当前支持一片式前刘海设计。发片会单独导出，含原始轮廓和可选布料缝份；不织布可沿内侧轮廓裁剪。</p>`;
-if(tab==='pattern')html=`<h3>你的平面拆分纸样</h3><p class="help-text">双片式布偶 · 毫米尺寸 · SVG 矢量图</p>${field('seam','预留缝份',3,10,' mm',['3 mm','10 mm'])}<div class="divider"></div><p class="help-text">头部前片 × 1<br>头部后片 × 1<br>身体 × 2<br>手臂 × 4（左右各一对）<br>腿部 × 4（左右各一对）<br>${state.hair?'前刘海 × 1':''}</p><button class="wide" id="showPieces">▧ 查看全部拆分</button><button class="wide primary" id="exportPanel">↓ 下载原尺寸 SVG</button><div class="divider"></div><p class="help-text">裁剪线为浅色外轮廓；虚线为缝线。导出文件包含 5 cm 校准尺和返口提示。尺寸为平面设计参考，填充后的实际高度需要试缝确认。</p>`;
-$('#controls').innerHTML=html;$$('[data-param]').forEach(el=>el.oninput=()=>{state[el.dataset.param]=+el.value;$('#o-'+el.dataset.param).textContent=el.value+({height:' cm',seam:' mm'}[el.dataset.param]||'%');render();save()});
-$$('[data-preset]').forEach(el=>el.onclick=()=>{const i=+el.dataset.preset;Object.assign(state,[{head:100,body:100,arm:100,leg:100},{head:85,body:85,arm:110,leg:135},{head:120,body:120,arm:75,leg:75}][i]);state.preset=['圆滚滚','小长腿','小团子'][i];controls();render();save()});
-$$('[data-color]').forEach(el=>el.onclick=()=>{state.color=el.dataset.color;state.colorName=colors.find(c=>c[0]===state.color)[1];controls();render();save()});
-$$('[data-face]').forEach(el=>el.onclick=()=>{state.face=el.dataset.face;render();save()});
-const bind=(id,fn)=>{if($(id))$(id).onclick=fn};bind('#pen',()=>{tool='pen';controls()});bind('#eraser',()=>{tool='eraser';controls()});bind('#undo',()=>{state.strokes.pop();render();save()});bind('#clearFace',()=>{state.strokes=[];render();save()});bind('#toggleHair',()=>{state.hair=!state.hair;render();controls();save()});bind('#resetHair',()=>{state.points=structuredClone(defaults.points);state.hairLength=80;state.hair=true;render();controls();save()});bind('#showPieces',()=>setView('pieces'));bind('#exportPanel',download);
-if($('#ink'))$('#ink').oninput=e=>ink=e.target.value;if($('#brush'))$('#brush').oninput=e=>{brush=+e.target.value;$('#brushValue').textContent=brush};if($('#hairColor'))$('#hairColor').oninput=e=>{state.hairColor=e.target.value;render();save()};}
-function geometry(){const h=state.head/100,b=state.body/100,a=state.arm/100,l=state.leg/100;return{h,b,a,l,headY:190,bodyY:316,legY:383,bottom:383+92*l,top:190-104*h}}
-function hairPath(){return `M -97 -38 C -102 -126 102 -126 97 -38 L ${[...state.points].reverse().map(p=>`${p[0]} ${p[1]*state.hairLength/80-38}`).join(' L ')} Z`}
-function faceMarkup(){let s='';if(state.face==='smile')s='<ellipse cx="-37" cy="0" rx="6" ry="8" fill="#595044"/><ellipse cx="37" cy="0" rx="6" ry="8" fill="#595044"/><path d="M -10 18 Q 0 31 10 18" fill="none" stroke="#705e4f" stroke-width="3" stroke-linecap="round"/><ellipse cx="-54" cy="20" rx="15" ry="8" fill="#dda998" opacity=".48"/><ellipse cx="54" cy="20" rx="15" ry="8" fill="#dda998" opacity=".48"/>';
-if(state.face==='sleep')s='<path d="M-46 3 Q-36 12-26 3 M26 3 Q36 12 46 3 M-7 24 Q0 30 7 24" stroke="#705e4f" stroke-width="3" fill="none" stroke-linecap="round"/>';
-return s+state.strokes.map((x,i)=>`<path data-stroke="${i}" d="${x.d}" fill="none" stroke="${x.color}" stroke-width="${x.width}" stroke-linecap="round" stroke-linejoin="round"/>`).join('')}
-function render(){const {h,b,a,l,headY,bodyY,legY}=geometry();$('#doll').innerHTML=`<defs><radialGradient id="cloth" cx="35%" cy="25%" r="80%"><stop stop-color="#fff9ec" stop-opacity=".75"/><stop offset=".65" stop-color="${state.color}"/><stop offset="1" stop-color="#b9a88d" stop-opacity=".5"/></radialGradient><filter id="texture"><feTurbulence type="fractalNoise" baseFrequency=".7" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope=".065"/></feComponentTransfer><feBlend in="SourceGraphic" mode="multiply"/></filter><clipPath id="faceClip"><ellipse rx="106" ry="100"/></clipPath></defs><g transform="translate(280 300) scale(${zoom}) translate(-280 -300)"><ellipse cx="280" cy="${legY+92*l+17}" rx="105" ry="12" fill="#ced0b9" opacity=".28"/><g fill="${state.color}" stroke="#c6b79d" stroke-width="1.2" filter="url(#texture)"><ellipse cx="${280-65*b}" cy="${bodyY+20}" rx="25" ry="${61*a}" transform="rotate(23 ${280-65*b} ${bodyY+20})"/><ellipse cx="${280+65*b}" cy="${bodyY+20}" rx="25" ry="${61*a}" transform="rotate(-23 ${280+65*b} ${bodyY+20})"/><ellipse cx="${280-33*b}" cy="${legY+36*l}" rx="${28*b}" ry="${56*l}"/><ellipse cx="${280+33*b}" cy="${legY+36*l}" rx="${28*b}" ry="${56*l}"/><ellipse cx="280" cy="${bodyY}" rx="${69*b}" ry="89"/><ellipse cx="280" cy="${headY}" rx="${112*h}" ry="${104*h}"/><g fill="url(#cloth)"><ellipse cx="280" cy="${bodyY}" rx="${69*b}" ry="89"/><ellipse cx="280" cy="${headY}" rx="${112*h}" ry="${104*h}"/></g></g><path d="M ${280-47*b} 353 Q 280 369 ${280+47*b} 353" fill="none" stroke="#baa88d" stroke-dasharray="2 4" opacity=".4"/><g id="faceGroup" transform="translate(280 ${headY}) scale(${h})"><g clip-path="url(#faceClip)">${faceMarkup()}</g>${state.hair?`<path d="${hairPath()}" fill="${state.hairColor}" stroke="#5f6246" stroke-width="1"/><path d="M-78 -57 Q-65 -85-48 -86 M-37 -64 Q-30 -83-18 -91 M17 -72 Q25 -86 35 -89 M58 -65 Q65 -79 72 -77" fill="none" stroke="#ffffff" opacity=".12" stroke-width="3"/>`:''}${tab==='hair'&&state.hair?state.points.map((p,i)=>`<circle data-point="${i}" cx="${p[0]}" cy="${p[1]*state.hairLength/80-38}" r="5" fill="white" stroke="#68795a" stroke-width="2" style="cursor:grab"/>`).join(''):''}</g></g>`;$('#heightLabel').textContent=state.height+' cm';$('#summaryHeight').textContent=state.height+' cm';$('#summarySeam').textContent=state.seam+' mm';$('#summaryStyle').textContent=state.preset;$('#colorDot').style.background=state.color;$('#colorName').textContent=state.colorName;if(view==='pieces')$('#piecesPreview').innerHTML=pattern();}
-function setView(v){view=v;$('#doll').style.display=v==='doll'?'block':'none';$('#piecesPreview').hidden=v!=='pieces';$('.height-guide').style.display=v==='doll'?'block':'none';$$('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===v));render()}
-function facePoint(e){const g=$('#faceGroup'),pt=new DOMPoint(e.clientX,e.clientY);return pt.matrixTransform(g.getScreenCTM().inverse())}
-$('#doll').onpointerdown=e=>{if(tab==='hair'&&e.target.dataset.point!==undefined){drag=+e.target.dataset.point;$('#doll').setPointerCapture(e.pointerId);return}if(tab!=='face')return;const p=facePoint(e);if((p.x/106)**2+(p.y/100)**2>1)return;if(tool==='eraser'){if(e.target.dataset.stroke!==undefined){state.strokes.splice(+e.target.dataset.stroke,1);render();save()}return}drawing={d:`M ${p.x.toFixed(2)} ${p.y.toFixed(2)} l 0.01 0`,color:ink,width:brush};state.strokes.push(drawing);$('#doll').setPointerCapture(e.pointerId);render()};
-$('#doll').onpointermove=e=>{if(drag>=0){const p=facePoint(e);state.points[drag]=[Math.max(-95,Math.min(95,p.x)),Math.max(-20,Math.min(85,(p.y+38)*80/state.hairLength))];render()}else if(drawing){const p=facePoint(e);drawing.d+=` L ${p.x.toFixed(2)} ${p.y.toFixed(2)}`;render()}};
-const endDraw=()=>{if(drawing||drag>=0)save();drawing=null;drag=-1};$('#doll').onpointerup=endDraw;$('#doll').onpointercancel=endDraw;
-function pattern(){const g=geometry(),scale=state.height*10/(g.bottom-g.top),headW=224*g.h*scale,headH=208*g.h*scale,bodyW=138*g.b*scale,bodyH=178*scale,armW=50*scale,armH=122*g.a*scale,legW=56*g.b*scale,legH=112*g.l*scale,seam=state.seam;
-const items=[['头部前片 × 1',headW,headH,'headFront'],['头部后片 × 1',headW,headH,'head'],['身体 × 2',bodyW,bodyH,'body'],['手臂 × 4',armW,armH,'arm'],['腿部 × 4',legW,legH,'leg']];if(state.hair)items.push(['前刘海 × 1',headW,headH*.7,'hair']);const width=Math.max(210,headW*2+seam*4+40),gap=16;let x=15,y=40,rowH=0,content='';
-for(const [name,w,h,type] of items){if(x+w+seam*2>width-10){x=15;y+=rowH+gap;rowH=0}const cx=x+w/2+seam,cy=y+h/2+seam;let shape=type==='hair'?`<path d="${hairPath()}" transform="translate(${cx} ${y+104*g.h*scale+seam}) scale(${g.h*scale})"/>`:`<ellipse cx="${cx}" cy="${cy}" rx="${w/2}" ry="${h/2}"/>`;if(type==='hair'){const k=g.h*scale;content+=`<g fill="none" stroke="#b7b7b7" stroke-width="${2*seam/k}" stroke-linejoin="round">${shape}</g><g fill="white" stroke="#333" stroke-width="${.4/k}" stroke-dasharray="${2/k} ${1.5/k}">${shape}</g>`}else content+=`<g fill="none" stroke="#b7b7b7" stroke-width="${seam*2}">${shape}</g><g fill="white" stroke="#333" stroke-width=".4" stroke-dasharray="2 1.5">${shape}</g>`;
-if(type==='headFront')content+=`<g transform="translate(${cx} ${cy}) scale(${g.h*scale})">${faceMarkup()}</g>`;
-content+=`<text x="${cx}" y="${y+h+seam*2+5}" text-anchor="middle" font-size="3">${name}</text>`;if(type!=='hair')content+=`<path d="M ${cx-5} ${cy+h/2} h 10" stroke="#333" stroke-width="1"/><text x="${cx}" y="${cy+h/2-4}" text-anchor="middle" font-size="2.5">此处留返口</text>`;x+=w+seam*2+gap;rowH=Math.max(rowH,h+seam*2+10)}
-const height=y+rowH+42;return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}mm" height="${height}mm" viewBox="0 0 ${width} ${height}" style="background:white"><rect width="100%" height="100%" fill="white"/><g font-family="sans-serif" fill="#333"><text x="15" y="13" font-size="5">努努制作台 · 双片式布偶参考纸样</text><text x="15" y="21" font-size="3">参考高度 ${state.height} cm · 缝份 ${seam} mm · 100% 原尺寸打印</text><text x="15" y="28" font-size="2.8">浅灰外缘＝裁剪线 / 虚线＝缝线 / 未打样，先用余布试缝</text>${content}<path d="M15 ${height-19} v-4 m0 4 h50 m0 0 v-4" fill="none" stroke="#333" stroke-width=".5"/><text x="15" y="${height-11}" font-size="3">5 cm 校准尺（打印后测量）</text><text x="15" y="${height-4}" font-size="2.5">头、身体、四肢分别缝合填充，再藏针连接；发片固定在头部前片。</text></g></svg>`}
-function download(){const blob=new Blob([pattern()],{type:'image/svg+xml;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=(state.name||'我的努努').replace(/[<>:"/\\|?*]/g,'_')+'-参考纸样.svg';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('纸样已导出，记得核对 5 cm 校准尺 🧵')}
-$$('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;$$('[data-tab]').forEach(t=>t.classList.toggle('active',t===b));if(tab==='face'||tab==='hair')setView('doll');controls();render()});$$('[data-view]').forEach(b=>b.onclick=()=>setView(b.dataset.view));['#exportTop','#exportSide'].forEach(id=>$(id).onclick=download);$('#save').onclick=()=>save(true);$('#projectName').value=state.name;$('#projectName').oninput=e=>{state.name=e.target.value;save()};$('#help').onclick=()=>$('#guide').showModal();$('#closeGuide').onclick=()=>$('#guide').close();function setZoom(z){zoom=Math.max(.6,Math.min(1.5,z));$('#zoomLabel').textContent=Math.round(zoom*100)+'%';render()}$('#zoomIn').onclick=()=>setZoom(zoom+.1);$('#zoomOut').onclick=()=>setZoom(zoom-.1);$('#resetZoom').onclick=()=>setZoom(1);controls();render();
+/* 努努赛博定制台 · 页面
+ * 每一片裁片有自己的画布。图样和 3D 都从这块画布取图：在哪边画，笔画都落在这块画布上，两边立刻都看得到。
+ * 画笔之前先过「守卫」：脸只能画在脸片的脸窗里、发片层只能画在发片布上、离缝线太近的地方不让画、没裁片盖着的地方画不上。
+ * 备料单和检查从画布里数出来（发片涂了几成、几种颜色），发片布上画了脸、肤色布上涂了发色，都会被拦下来。 */
+(function () {
+'use strict';
+const C = window.NunuCore, Shape = window.NunuShape, P = window.NunuPattern;
+const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
+const clone = (x) => JSON.parse(JSON.stringify(x));
+const r1 = (v) => Math.round(v * 10) / 10;
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+/** 按住画布拖到外面也继续收到事件（有些环境里没有这个指针，别因此中断） */
+const capture = (el, e) => { try { el.setPointerCapture(e.pointerId); } catch { /* 没有也行 */ } };
+const RES = 2; // 每个图纸像素用几个画布像素
+
+/* ============ 状态 ============ */
+const STORE = 'nunu-v4', IMPORTS = 'nunu-v4-imports';
+const DEFAULTS = {
+  version: 4, name: '我的第一只努努', template: 'nunu-public', faceMm: 100, seamMm: 6, guardMm: 3, skin: '#f1dfcd',
+  hairPalette: ['#7d594a', '#d9b99b', '#2f2a2a', '#e7a8a0', '#c9a35c', '#9a7bb5'], tplData: {},
+};
+function loadState() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE));
+    if (s && s.version === 4) return { ...clone(DEFAULTS), ...s, tplData: s.tplData || {} };
+  } catch { /* 读不出来就用新的 */ }
+  return clone(DEFAULTS);
+}
+function loadImports() { try { const l = JSON.parse(localStorage.getItem(IMPORTS)); return Array.isArray(l) ? l : []; } catch { return []; } }
+let state = loadState();
+let imports = loadImports();
+const ui = { layer: 'face', tool: 'pen', ink: '#4b3939', hair: state.hairPalette[0], size: 3, mirror: true, seamGuard: true, zones: false, guides: true, seams: true, paint3d: true, tab: 'pattern', selected: '', hover: '' };
+const INK = ['#4b3939', '#7a5548', '#e9a3a0', '#f4c7c3', '#fffaf2', '#e45d6f', '#6f8ec8', '#8aa86a'];
+const SKINS = ['#f1dfcd', '#f2d3ce', '#dac4aa', '#d1ddc8', '#d4d9e8'];
+
+const allTemplates = () => [P.public, ...imports];
+const tplById = (id) => allTemplates().find((t) => t.id === id) || P.public;
+const td = () => (state.tplData[state.template] ||= { roles: {}, materials: {}, strokes: [], cut: {} });
+
+let doc = null;
+const rt = {}; // 每片的运行时：图层画布、合成画布、遮罩、区域缓存
+const mm = () => C.mmPerPx(doc, state.faceMm);
+const guardPx = () => (ui.seamGuard ? state.guardMm / mm() : 0);
+const sizePx = () => ui.size / mm();
+
+function buildDoc(keepRuntime) {
+  if (state.template !== (doc && doc.id) && !allTemplates().some((t) => t.id === state.template)) state.template = P.public.id;
+  const tpl = tplById(state.template), d = td();
+  doc = C.makeDoc(tpl, { roles: d.roles, materials: d.materials });
+  if (!keepRuntime) for (const k of Object.keys(rt)) delete rt[k];
+  for (const p of doc.pieces) {
+    const r = rt[p.id];
+    if (r && r.sig !== sigOf(p)) delete rt[p.id];
+  }
+  for (const p of doc.pieces) ensureRt(p);
+  cutCache.clear();
+}
+const sigOf = (p) => `${p.box.x.toFixed(1)},${p.box.y.toFixed(1)},${p.box.w.toFixed(1)},${p.box.h.toFixed(1)},${p.poly.length}`;
+function ensureRt(p) {
+  if (rt[p.id]) return rt[p.id];
+  const cw = Math.max(8, Math.round(p.box.w * RES)), ch = Math.max(8, Math.round(p.box.h * RES));
+  const mk = () => { const c = document.createElement('canvas'); c.width = cw; c.height = ch; return c; };
+  const poly2d = new Path2D();
+  p.poly.forEach(([x, y], i) => (i ? poly2d.lineTo(x, y) : poly2d.moveTo(x, y)));
+  poly2d.closePath();
+  return (rt[p.id] = { sig: sigOf(p), cw, ch, layers: {}, comp: mk(), mk, poly2d, zones: {}, overlay: {}, mask: null });
+}
+const layerCanvas = (p, layer) => { const r = ensureRt(p); return (r.layers[layer] ||= r.mk()); };
+/** 画布上用图纸坐标画：把图纸像素换算成这片画布的像素 */
+function applyTf(ctx, p) {
+  const r = rt[p.id], sx = r.cw / p.box.w, sy = r.ch / p.box.h;
+  ctx.setTransform(sx, 0, 0, sy, -p.box.x * sx, -p.box.y * sy);
+}
+const strokesOf = (id, layer) => td().strokes.filter((s) => s.p === id && (!layer || s.l === layer));
+
+/* ============ 提示 ============ */
+let toastTimer = 0;
+function toast(msg, bad) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.toggle('bad', !!bad);
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), bad ? 2800 : 2200);
+}
+let lastBlockToast = 0;
+function toastBlocked(reason) {
+  const now = performance.now(), hint = $('#layerHint');
+  hint.textContent = '✋ ' + reason;
+  hint.classList.add('blocked');
+  clearTimeout(toastBlocked.t);
+  toastBlocked.t = setTimeout(() => { hint.classList.remove('blocked'); updateHint(); }, 3000);
+  if (now - lastBlockToast > 1800) { toast(reason, true); lastBlockToast = now; }
+}
+function updateHint() {
+  const h = $('#layerHint');
+  if (h.classList.contains('blocked')) return;
+  const g = ui.seamGuard ? `，离缝线留 ${state.guardMm} mm` : '（接缝保护已关，压到缝份的笔画会在检查里标出来）';
+  const sel = doc && doc.byId[ui.selected];
+  const info = sel ? `　选中：${sel.label} ${sel.name}（${sel.material === 'hair' ? '发片布' : '肤色布'}，用途：${C.ROLES[sel.role].label}）` : '';
+  h.textContent = {
+    face: `脸：只能画在脸片的脸窗里（蓝色虚线框住的那块）${g}。额头、边上点了也画不上。`,
+    skin: `彩绘：腮红、花纹，画在肤色布的裁片上${g}。发片布不画彩绘。`,
+    hair: '发片：后发（头顶发、后脑）是缝上去的，整片涂满，涂的颜色就是这块发片布的颜色；前发直接画在脸片的额头那一块（蓝色弧线以上），做成贴布贴上去。别的肤色布上画不了发片。',
+  }[ui.layer] + info;
+}
+
+/* ============ 区域（守卫） ============ */
+function zoneOf(p, layer) {
+  const r = ensureRt(p), key = `${layer}|${guardPx().toFixed(2)}`;
+  if (!r.zones[key]) {
+    const zone = C.buildZone(doc, p, layer, guardPx());
+    const path = new Path2D();
+    for (const loop of C.zoneLoops(zone)) { loop.forEach(([x, y], i) => (i ? path.lineTo(x, y) : path.moveTo(x, y))); path.closePath(); }
+    r.zones[key] = { zone, path };
+  }
+  return r.zones[key];
+}
+/** 这一点能不能画；不能的话说为什么 */
+function pointCheck(p, layer, x, y, erase) {
+  const rule = C.layerRule(p, layer);
+  if (!rule.ok) return { ok: false, reason: rule.reason };
+  if (!C.inPoly(p.poly, x, y)) return { ok: false, reason: '', quiet: true };
+  if (erase) return { ok: true };
+  if (C.zoneAt(zoneOf(p, layer).zone, x, y)) return { ok: true };
+  return { ok: false, reason: layer === 'face' ? '脸只能画在脸窗里（蓝色虚线框住的那块），额头和边上不行。' : `离缝线太近了（要留 ${state.guardMm} mm 缝份），往里一点。` };
+}
+
+/* ============ 画笔 ============ */
+function paintStroke(p, layer, st, fromIdx) {
+  const cv = layerCanvas(p, layer), ctx = cv.getContext('2d'), pts = st.pts;
+  ctx.save();
+  applyTf(ctx, p);
+  ctx.clip(st.e || st.x ? rt[p.id].poly2d : zoneOf(p, layer).path, st.e || st.x ? 'nonzero' : 'evenodd');
+  ctx.globalCompositeOperation = st.e ? 'destination-out' : 'source-over';
+  ctx.strokeStyle = ctx.fillStyle = st.c;
+  ctx.lineWidth = st.w;
+  ctx.lineCap = ctx.lineJoin = 'round';
+  const start = Math.max(0, fromIdx);
+  if (pts.length === 2 && start === 0) {
+    ctx.beginPath(); ctx.arc(pts[0], pts[1], st.w / 2, 0, C.TAU); ctx.fill();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(pts[start], pts[start + 1]);
+    if (start + 2 >= pts.length) ctx.lineTo(pts[start] + 0.001, pts[start + 1]);
+    for (let i = start + 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function replayLayer(p, layer) {
+  const r = ensureRt(p);
+  const list = strokesOf(p.id, layer);
+  if (!list.length && !r.layers[layer]) return;
+  const cv = layerCanvas(p, layer);
+  cv.getContext('2d').clearRect(0, 0, cv.width, cv.height);
+  for (const st of list) if (st.pts.length >= 2) paintStroke(p, layer, st, 0);
+}
+function replayAll() { for (const p of doc.pieces) for (const l of C.LAYERS) replayLayer(p, l); }
+
+const history = [], redoStack = [];
+let cur = null;
+
+function startStroke(src, layer) {
+  const erase = ui.tool === 'eraser';
+  cur = {
+    src, layer, erase, color: layer === 'hair' ? ui.hair : ui.ink, w: sizePx(), guardOff: !ui.seamGuard,
+    tracks: [{ mirror: false, pieceId: '', stroke: null, last: null }], group: [], touched: new Set(),
+  };
+  if (ui.mirror) cur.tracks.push({ mirror: true, pieceId: '', stroke: null, last: null });
+}
+/** 把指针现在落在的点 {pieceId,x,y} 喂给画笔：每个点先过守卫，过不了就断笔（下一个能画的点重新起笔） */
+function feed(hit) {
+  if (!cur) return;
+  let blocked = '';
+  for (const tr of cur.tracks) {
+    let pid = hit.pieceId, x = hit.x, y = hit.y;
+    if (tr.mirror) { const m = C.mirrorOf(doc, pid, x, y); if (!m) continue; pid = m.pieceId; x = m.x; y = m.y; }
+    const p = doc.byId[pid];
+    if (!p) continue;
+    const chk = pointCheck(p, cur.layer, x, y, cur.erase);
+    if (!chk.ok) {
+      tr.stroke = null; tr.last = null;
+      if (!tr.mirror && !blocked) blocked = chk.reason;
+      continue;
+    }
+    if (tr.pieceId !== pid) { tr.stroke = null; tr.last = null; tr.pieceId = pid; }
+    if (!tr.stroke) {
+      tr.stroke = { p: pid, l: cur.layer, c: cur.color, w: cur.w, e: cur.erase, x: cur.guardOff ? 1 : 0, pts: [] };
+      td().strokes.push(tr.stroke);
+      cur.group.push(tr.stroke);
+    }
+    const from = tr.stroke.pts.length >= 2 ? tr.stroke.pts.length - 2 : 0;
+    tr.stroke.pts.push(r1(x), r1(y));
+    paintStroke(p, cur.layer, tr.stroke, tr.stroke.pts.length === 2 ? 0 : from);
+    cur.touched.add(pid);
+    markPiece(pid);
+  }
+  if (blocked) toastBlocked(blocked);
+}
+function breakStroke() { if (cur) for (const tr of cur.tracks) { tr.stroke = null; tr.last = null; } }
+function endStroke() {
+  if (!cur) return;
+  const c = cur;
+  cur = null;
+  if (c.group.length) {
+    history.push(c.group);
+    if (history.length > 80) history.shift();
+    redoStack.length = 0;
+    afterChange();
+  }
+}
+function undo() {
+  const g = history.pop();
+  if (!g) { toast('没有可以撤销的了'); return; }
+  const arr = td().strokes;
+  for (const st of g) { const i = arr.indexOf(st); if (i >= 0) arr.splice(i, 1); }
+  redoStack.push(g);
+  refreshStrokes(g);
+}
+function redo() {
+  const g = redoStack.pop();
+  if (!g) { toast('没有可以重做的了'); return; }
+  td().strokes.push(...g);
+  history.push(g);
+  refreshStrokes(g);
+}
+function refreshStrokes(g) {
+  const seen = new Set();
+  for (const st of g) { const k = st.p + '|' + st.l; if (seen.has(k)) continue; seen.add(k); const p = doc.byId[st.p]; if (p) { replayLayer(p, st.l); markPiece(p.id); } }
+  afterChange();
+}
+function afterChange() { scheduleStats(); scheduleSave(); }
+
+/* ============ 合成：每片一块画布，图样和 3D 都用它 ============ */
+function overlayOf(p) {
+  const r = ensureRt(p), rule = C.layerRule(p, ui.layer), key = `${ui.layer}|${guardPx().toFixed(2)}|${rule.ok}`;
+  if (!r.overlay[key]) {
+    const cv = r.mk(), c = cv.getContext('2d');
+    applyTf(c, p);
+    c.fillStyle = 'rgba(205,70,70,.4)';
+    c.fill(r.poly2d);
+    if (rule.ok) { c.globalCompositeOperation = 'destination-out'; c.fillStyle = '#000'; c.fill(zoneOf(p, ui.layer).path, 'evenodd'); }
+    r.overlay = { [key]: cv };
+  }
+  return r.overlay[key];
+}
+function compose(p) {
+  const r = ensureRt(p), cv = r.comp, c = cv.getContext('2d');
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.clearRect(0, 0, cv.width, cv.height);
+  applyTf(c, p);
+  c.save();
+  c.clip(r.poly2d);
+  c.fillStyle = p.material === 'hair' ? '#ece7dc' : state.skin;
+  c.fillRect(p.box.x - 2, p.box.y - 2, p.box.w + 4, p.box.h + 4);
+  for (const l of ['skin', 'face', 'hair']) if (r.layers[l]) c.drawImage(r.layers[l], p.box.x, p.box.y, p.box.w, p.box.h);
+  if (ui.guides && p.role === 'face' && doc.guides) {
+    c.save();
+    c.setLineDash([6, 5]);
+    c.lineWidth = 1.7;
+    c.strokeStyle = 'rgba(70,120,170,.8)';
+    const path = (poly) => { c.beginPath(); poly.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.closePath(); c.stroke(); };
+    path(doc.guides.lens); path(doc.guides.eyeL); path(doc.guides.eyeR); path(doc.guides.mouth);
+    c.restore();
+  }
+  if (ui.zones) c.drawImage(overlayOf(p), p.box.x, p.box.y, p.box.w, p.box.h);
+  if (p.id === ui.selected) { c.fillStyle = 'rgba(255,208,70,.26)'; c.fill(r.poly2d); }
+  c.restore();
+  if (ui.seams) {
+    c.save();
+    c.strokeStyle = 'rgba(70,64,52,.55)';
+    c.lineWidth = 2.2;
+    c.stroke(r.poly2d);
+    c.restore();
+  }
+}
+
+/* ============ 缝份（裁剪线） ============ */
+const cutCache = new Map();
+function cutPoly(p) {
+  const d = state.seamMm / mm();
+  if (d < 0.5) return p.poly;
+  const key = `${p.id}|${d.toFixed(2)}`;
+  if (!cutCache.has(key)) { for (const k of [...cutCache.keys()]) if (k.startsWith(p.id + '|')) cutCache.delete(k); cutCache.set(key, Shape.offsetPolygon(p.poly, d, 2)); }
+  return cutCache.get(key);
+}
+const cutMap = () => Object.fromEntries(doc.pieces.map((p) => [p.id, cutPoly(p)]));
+
+/* ============ 统计 → 备料 / 检查 ============ */
+let stats = {}, report = null, statsTimer = 0;
+function polyMask(p) {
+  const r = ensureRt(p);
+  if (!r.mask) {
+    const cv = r.mk(), c = cv.getContext('2d');
+    applyTf(c, p);
+    c.fillStyle = '#000';
+    c.fill(r.poly2d);
+    const d = c.getImageData(0, 0, cv.width, cv.height).data, m = new Uint8Array(cv.width * cv.height);
+    let n = 0;
+    for (let i = 0; i < m.length; i++) if (d[i * 4 + 3] > 128) { m[i] = 1; n++; }
+    r.mask = { m, n };
+  }
+  return r.mask;
+}
+const hexOf = (r, g, b) => '#' + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+const rgbOf = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+function scanLayer(p, layer) {
+  const r = rt[p.id], cv = r && r.layers[layer];
+  if (!cv || !strokesOf(p.id, layer).length) return null;
+  const mask = polyMask(p), data = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+  const buckets = new Map();
+  let ink = 0, outside = 0;
+  const sx = cv.width / p.box.w, sy = cv.height / p.box.h;
+  const rects = layer === 'face' && doc.guides ? [doc.guides.eyeL, doc.guides.eyeR, doc.guides.mouth].map((q) => C.boxOfPoly(q)) : null;
+  for (let y = 0; y < cv.height; y += 2) for (let x = 0; x < cv.width; x += 2) {
+    const i = y * cv.width + x;
+    if (!mask.m[i] || data[i * 4 + 3] < 128) continue;
+    ink++;
+    if (rects) {
+      const gx = p.box.x + x / sx, gy = p.box.y + y / sy;
+      if (!rects.some((q) => gx >= q.x - 12 && gx <= q.x + q.w + 12 && gy >= q.y - 12 && gy <= q.y + q.h + 12)) outside++;
+    }
+    if (layer === 'hair') {
+      const k = ((data[i * 4] >> 5) << 6) | ((data[i * 4 + 1] >> 5) << 3) | (data[i * 4 + 2] >> 5);
+      const b = buckets.get(k) || { n: 0, r: 0, g: 0, b: 0 };
+      b.n++; b.r += data[i * 4]; b.g += data[i * 4 + 1]; b.b += data[i * 4 + 2];
+      buckets.set(k, b);
+    }
+  }
+  return { ink: ink * 4, outsideFrac: ink ? outside / ink : 0, buckets, sampled: ink, total: mask.n, areaPx: (ink * 4) / (sx * sy) };
+}
+function dominantColors(buckets, sampled) {
+  const list = [...buckets.values()].map((b) => ({ n: b.n, hex: hexOf(b.r / b.n, b.g / b.n, b.b / b.n) })).sort((a, b) => b.n - a.n);
+  const merged = [];
+  for (const b of list) {
+    if (b.n / sampled < 0.04) continue;
+    const hit = merged.find((m) => C.colorDist(m.hex, b.hex) < 48);
+    if (hit) hit.n += b.n; else merged.push({ ...b });
+  }
+  const tot = merged.reduce((s, m) => s + m.n, 0) || 1;
+  return merged.map((m) => {
+    const pal = state.hairPalette.find((h) => C.colorDist(h, m.hex) < 40);
+    return { hex: pal ? pal.toLowerCase() : m.hex, frac: m.n / tot };
+  });
+}
+function computeStats() {
+  const out = {};
+  for (const p of doc.pieces) {
+    const st = {};
+    const face = scanLayer(p, 'face'), skin = scanLayer(p, 'skin'), hair = scanLayer(p, 'hair');
+    if (face) { st.faceInk = face.ink; st.faceOutside = face.outsideFrac; }
+    if (skin) st.paintInk = skin.ink;
+    if (hair) {
+      st.hairInk = hair.ink;
+      st.hairAreaPx = hair.areaPx;
+      st.coverage = Math.min(1, (hair.sampled * 4) / Math.max(1, hair.total));
+      st.colors = dominantColors(hair.buckets, hair.sampled);
+    } else { st.coverage = 0; st.colors = []; }
+    out[p.id] = st;
+  }
+  stats = out;
+  computeReport();
+}
+function scheduleStats() { clearTimeout(statsTimer); statsTimer = setTimeout(computeStats, 260); }
+function guardOffCount() { return td().strokes.filter((s) => s.x && !s.e).length; }
+function computeReport() {
+  const cutAreas = {};
+  for (const p of doc.pieces) cutAreas[p.id] = C.areaOfPoly(cutPoly(p));
+  const bom = C.bom(doc, stats, { faceMm: state.faceMm, skin: state.skin, cutAreas });
+  const list = C.checks(doc, stats, { faceMm: state.faceMm, guardOff: guardOffCount() });
+  report = { bom, checks: list, errors: list.filter((c) => c.level === 'error').length, warns: list.filter((c) => c.level === 'warn').length };
+  const b = $('#checkBadge');
+  b.textContent = report.errors ? String(report.errors) : report.warns ? String(report.warns) : '';
+  b.className = report.errors ? 'bad' : report.warns ? 'warn' : '';
+  $('#bomBadge').textContent = String(report.bom.pieceCount);
+  updateExportGate();
+  if (ui.tab === 'bom' || ui.tab === 'check') renderDock();
+}
+
+/* ============ 重画调度 ============ */
+const dirty = { pieces: new Set(), sheet: true, scene: true };
+let frameReq = 0;
+function schedule() { if (!frameReq) frameReq = requestAnimationFrame(frame); }
+function markPiece(id) { dirty.pieces.add(id); dirty.sheet = true; dirty.scene = true; schedule(); }
+function markAll() { for (const p of doc.pieces) dirty.pieces.add(p.id); dirty.sheet = true; dirty.scene = true; schedule(); }
+function markSheet() { dirty.sheet = true; schedule(); }
+function frame() {
+  frameReq = 0;
+  for (const id of dirty.pieces) { const p = doc.byId[id]; if (p) { compose(p); if (model) model.refresh(id); } }
+  dirty.pieces.clear();
+  if (dirty.sheet && sheet) { sheet.draw(sheetEnv()); dirty.sheet = false; }
+  if (dirty.scene && model) { model.render(); dirty.scene = false; }
+}
+function sheetEnv(clean) {
+  return { comps: Object.fromEntries(doc.pieces.map((p) => [p.id, { canvas: rt[p.id].comp }])), cutPolys: cutMap(), showCut: true, showSeams: ui.seams, mm: mm(), selectedId: clean ? '' : ui.selected, hoverId: clean ? '' : ui.hover };
+}
+
+/* ============ 图样交互 ============ */
+let sheet = null, model = null;
+function selectPiece(id) {
+  if (ui.selected === id) return;
+  const old = ui.selected;
+  ui.selected = id;
+  if (old && doc.byId[old]) markPiece(old);
+  if (id && doc.byId[id]) markPiece(id);
+  markSheet();
+  updateHint();
+  if (ui.tab === 'pattern') highlightRow();
+}
+function setupSheet() {
+  const cv = $('#sheet');
+  sheet = window.NunuSheet.create(cv);
+  sheet.resize();
+  sheet.setDoc(doc, true);
+  const ptrs = new Map();
+  let pan = null, pinch = null, spaceDown = false, lockPiece = null;
+  window.addEventListener('keydown', (e) => { if (e.code === 'Space' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) spaceDown = true; });
+  window.addEventListener('keyup', (e) => { if (e.code === 'Space') spaceDown = false; });
+  cv.addEventListener('contextmenu', (e) => e.preventDefault());
+  cv.addEventListener('wheel', (e) => { e.preventDefault(); sheet.zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX, e.clientY); markSheet(); }, { passive: false });
+  cv.addEventListener('pointerdown', (e) => {
+    capture(cv, e);
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.size === 2) { endStroke(); pan = null; const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 }; return; }
+    if (e.button === 1 || e.button === 2 || spaceDown) { pan = { x: e.clientX, y: e.clientY }; return; }
+    if (e.button !== 0) return;
+    const hit = sheet.pieceAt(e.clientX, e.clientY, cutMap());
+    if (!hit) { selectPiece(''); return; }
+    selectPiece(hit.piece.id);
+    if (!hit.inSew) { toast('这是缝份的位置（裁剪线和缝线之间），不能画。往里一点。', true); return; }
+    startStroke('sheet', ui.layer);
+    lockPiece = hit.piece;
+    feed({ pieceId: hit.piece.id, x: hit.local.x, y: hit.local.y });
+  });
+  cv.addEventListener('pointermove', (e) => {
+    if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && ptrs.size >= 2) {
+      const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y), cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+      sheet.pan(cx - pinch.cx, cy - pinch.cy);
+      sheet.zoomAt(d / pinch.d, cx, cy);
+      pinch = { d, cx, cy };
+      markSheet();
+      return;
+    }
+    if (pan) { sheet.pan(e.clientX - pan.x, e.clientY - pan.y); pan = { x: e.clientX, y: e.clientY }; markSheet(); return; }
+    if (cur && cur.src === 'sheet' && lockPiece) {
+      const loc = sheet.localOn(lockPiece, e.clientX, e.clientY);
+      if (loc.inside) feed({ pieceId: lockPiece.id, x: loc.x, y: loc.y }); else breakStroke();
+      return;
+    }
+    const hit = sheet.pieceAt(e.clientX, e.clientY, null);
+    const id = hit ? hit.piece.id : '';
+    if (id !== ui.hover) { ui.hover = id; markSheet(); }
+  });
+  const up = (e) => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; if (!ptrs.size) pan = null; lockPiece = null; endStroke(); };
+  cv.addEventListener('pointerup', up);
+  cv.addEventListener('pointercancel', up);
+  $('#zoomIn').onclick = () => { sheet.zoomAt(1.25); markSheet(); };
+  $('#zoomOut').onclick = () => { sheet.zoomAt(1 / 1.25); markSheet(); };
+  $('#zoomFit').onclick = () => { sheet.fit(); markSheet(); };
+}
+
+/* ============ 3D 交互 ============ */
+function buildModel() {
+  if (!model) return;
+  model.build(doc, Object.fromEntries(doc.pieces.map((p) => [p.id, { canvas: rt[p.id].comp }])), state.skin);
+  dirty.scene = true;
+  schedule();
+}
+function setupModel() {
+  const cv = $('#model');
+  try { model = window.NunuModel.create(cv); } catch (err) { $('#modelError').hidden = false; model = null; return; }
+  model.resize();
+  let drag = null;
+  cv.addEventListener('contextmenu', (e) => e.preventDefault());
+  cv.addEventListener('wheel', (e) => { e.preventDefault(); model.view.zoom = Math.max(0.5, Math.min(3, model.view.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1))); dirty.scene = true; schedule(); }, { passive: false });
+  cv.addEventListener('pointerdown', (e) => {
+    capture(cv, e);
+    const rotate = e.button === 2 || !ui.paint3d || e.altKey || e.button === 1;
+    if (!rotate && e.button === 0) {
+      const hit = model.pick(e.clientX, e.clientY);
+      startStroke('model', ui.layer);
+      if (hit && hit.pieceId) { selectPiece(hit.pieceId); feed(hit); }
+      else if (hit && hit.base) toastBlocked('这里是裸露的娃娃，没有裁片盖着，画不上。画在有图样对应的地方。');
+      return;
+    }
+    drag = { x: e.clientX, y: e.clientY, moved: 0, click: e.button === 0 && !ui.paint3d };
+  });
+  cv.addEventListener('pointermove', (e) => {
+    if (cur && cur.src === 'model') {
+      const hit = model.pick(e.clientX, e.clientY);
+      if (hit && hit.pieceId) feed(hit); else breakStroke();
+      return;
+    }
+    if (drag) {
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      drag.moved += Math.abs(dx) + Math.abs(dy);
+      drag.x = e.clientX; drag.y = e.clientY;
+      model.view.rotY += dx * 0.01;
+      model.view.rotX = Math.max(-0.7, Math.min(0.7, model.view.rotX + dy * 0.006));
+      dirty.scene = true; schedule();
+    }
+  });
+  const up = (e) => {
+    if (drag && drag.click && drag.moved < 6) {
+      const hit = model.pick(e.clientX, e.clientY);
+      selectPiece(hit && hit.pieceId ? hit.pieceId : '');
+    }
+    drag = null;
+    endStroke();
+  };
+  cv.addEventListener('pointerup', up);
+  cv.addEventListener('pointercancel', up);
+  $$('[data-view]').forEach((b) => { b.onclick = () => { model.view.rotY = +b.dataset.view; model.view.rotX = 0.05; dirty.scene = true; schedule(); }; });
+  const setMode = (paint) => {
+    ui.paint3d = paint;
+    $('#modePaint').classList.toggle('on', paint);
+    $('#modeRotate').classList.toggle('on', !paint);
+    cv.classList.toggle('rotating', !paint);
+  };
+  $('#modePaint').onclick = () => setMode(true);
+  $('#modeRotate').onclick = () => setMode(false);
+  buildModel();
+}
+
+/* ============ 保存 ============ */
+let saveTimer = 0;
+function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(() => save(false), 700); }
+function save(manual) {
+  try {
+    localStorage.setItem(STORE, JSON.stringify(state));
+    localStorage.setItem(IMPORTS, JSON.stringify(imports));
+    $('#saveStatus').textContent = '● 已保存在此浏览器';
+    if (manual) toast('保存好了 ✿');
+  } catch {
+    $('#saveStatus').textContent = '存储已满或被禁用，没存上';
+    if (manual) toast('没存上：浏览器存储满了或被禁用。可以先导出图样。', true);
+  }
+}
+
+/* ============ 导出 ============ */
+function gate() {
+  if (!report) return { ok: false, needAck: false, text: '' };
+  if (report.errors) return { ok: false, needAck: false, text: report.checks.filter((c) => c.level === 'error').map((c) => c.text).join('；') };
+  return { ok: true, needAck: report.warns > 0, text: report.warns ? `有 ${report.warns} 条警告，看过再导出：` + report.checks.filter((c) => c.level === 'warn').map((c) => c.text).join('；') : '' };
+}
+function updateExportGate() {
+  const g = gate();
+  $('#ackWrap').hidden = !g.needAck;
+  $('#exportNote').textContent = g.text;
+  const allowed = g.ok && (!g.needAck || $('#ack').checked);
+  $('#exportSvg').disabled = !allowed;
+  $('#exportPng').disabled = !allowed;
+}
+function download(name, blob) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+}
+const safeName = () => (state.name || '努努').replace(/[\\/:*?"<>|]/g, '');
+const fmtPath = (poly, k) => 'M' + poly.map(([x, y]) => `${(x * k).toFixed(2)} ${(y * k).toFixed(2)}`).join('L') + 'Z';
+function exportSvg() {
+  const k = mm(), W = doc.w * k, H = doc.h * k + 14;
+  let body = '';
+  for (const p of doc.pieces) {
+    const st = stats[p.id] || {}, fill = p.material === 'hair' && st.colors && st.colors[0] ? st.colors[0].hex : 'none';
+    body += `<g><title>${esc(p.label + ' ' + p.name)}</title>`;
+    body += `<path d="${fmtPath(cutPoly(p), k)}" fill="none" stroke="#9a9588" stroke-width=".35" stroke-dasharray="3 2"/>`;
+    body += `<path d="${fmtPath(p.poly, k)}" fill="${fill}" fill-opacity=".28" stroke="#3f3a33" stroke-width=".5"/>`;
+    body += `<text x="${((p.box.x + p.box.w / 2) * k).toFixed(2)}" y="${((p.box.y + p.box.h / 2) * k).toFixed(2)}" font-size="4.2" text-anchor="middle" fill="#5a5448" font-family="sans-serif">${esc(p.label + ' ' + p.name)}</text></g>`;
+  }
+  if (doc.guides) {
+    for (const q of [doc.guides.lens, doc.guides.eyeL, doc.guides.eyeR, doc.guides.mouth]) body += `<path d="${fmtPath(q, k)}" fill="none" stroke="#4678aa" stroke-width=".3" stroke-dasharray="2 1.5"/>`;
+    for (const n of doc.guides.notches || []) { const s = 3 * (n.dir < 0 ? -1 : 1); body += `<path d="M${((n.x - 1.8 / k) * k).toFixed(2)} ${(n.y * k + s).toFixed(2)}H${((n.x + 1.8 / k) * k).toFixed(2)}L${(n.x * k).toFixed(2)} ${(n.y * k).toFixed(2)}Z" fill="none" stroke="#3f3a33" stroke-width=".35"/>`; }
+  }
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${W.toFixed(1)}mm" height="${H.toFixed(1)}mm" viewBox="0 0 ${W.toFixed(1)} ${H.toFixed(1)}">\n<title>${esc(state.name)} · ${esc(doc.name)} · ${esc(doc.scaleLabel)} ${state.faceMm} mm · 缝份 ${state.seamMm} mm</title>\n<rect width="100%" height="100%" fill="#fff"/>\n${body}\n<g transform="translate(8 ${(H - 6).toFixed(1)})" font-family="sans-serif" font-size="3.2" fill="#6b655a"><path d="M0 0H50M0 -2V2M50 -2V2" stroke="#6b655a" stroke-width=".4" fill="none"/><text x="54" y="1.2">5 cm 校准尺：按 100% 打印，量一下是不是 5 cm。实线是缝线，虚线是裁剪线（含 ${state.seamMm} mm 缝份），蓝虚线是脸窗和眼嘴参考框。</text></g>\n</svg>\n`;
+  download(`${safeName()}-纸样.svg`, new Blob([svg], { type: 'image/svg+xml' }));
+  toast('纸样 SVG 已导出，按 100% 打印');
+}
+function withCleanView(fn) {
+  const keep = { zones: ui.zones, selected: ui.selected };
+  ui.zones = false; ui.selected = '';
+  for (const p of doc.pieces) compose(p);
+  try { return fn(); } finally {
+    ui.zones = keep.zones; ui.selected = keep.selected;
+    markAll();
+  }
+}
+function exportPng() {
+  const s = 3, off = document.createElement('canvas');
+  withCleanView(() => {
+    const inst = window.NunuSheet.create(off, { fixed: { w: doc.w * s, h: doc.h * s } });
+    inst.resize();
+    inst.setDoc(doc, false);
+    inst.view.zoom = s; inst.view.x = 0; inst.view.y = 0;
+    inst.draw(sheetEnv(true));
+  });
+  off.toBlob((b) => { if (b) { download(`${safeName()}-彩色图样.png`, b); toast('彩色图样已导出'); } }, 'image/png');
+}
+function bomText() {
+  const b = report.bom;
+  const out = [`努努赛博定制台 · 备料单`, `作品：${state.name}　图纸：${doc.name}　${doc.scaleLabel} ${state.faceMm} mm　缝份 ${state.seamMm} mm　${new Date().toISOString().slice(0, 10)}`, '', '== 面料 =='];
+  for (const f of b.fabrics) out.push(`${f.label} ${f.hex}：${f.pieces} 片，面积 ${f.areaCm2.toFixed(0)} cm²，建议买 ${f.buyCm} cm（幅宽 ${C.FABRIC_WIDTH_CM} cm，含 30% 损耗）`);
+  out.push('', '== 裁片（按编号裁，裁完打钩）==');
+  for (const r of b.rows) out.push(`${td().cut[r.id] ? '[x]' : '[ ]'} ${r.label} ${r.name}　${r.w.toFixed(0)}×${r.h.toFixed(0)} mm　${r.fabric} ${r.hex}　用途：${C.ROLES[r.role].label}`);
+  out.push('', '== 检查 ==');
+  for (const c of report.checks) out.push(`${c.level === 'ok' ? '✓' : c.level === 'warn' ? '⚠' : '✗'} ${c.text}`);
+  out.push('', '图纸是网上流传的公开图纸，每一片的用途是按形状猜的；缝出来的布会有形变。先用便宜布试缝一遍，再裁正式布料。');
+  return out.join('\n') + '\n';
+}
+
+/* ============ 导入图纸图片 ============ */
+function importImage(file) {
+  const url = URL.createObjectURL(file), img = new Image();
+  img.onload = () => {
+    try {
+      const k = Math.min(1, 1500 / Math.max(img.naturalWidth, img.naturalHeight)), w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      const c = cv.getContext('2d', { willReadFrequently: true });
+      c.fillStyle = '#fff'; c.fillRect(0, 0, w, h); c.drawImage(img, 0, 0, w, h);
+      const d = c.getImageData(0, 0, w, h).data, gray = new Uint8Array(w * h);
+      for (let i = 0; i < w * h; i++) gray[i] = d[i * 4] * 0.3 + d[i * 4 + 1] * 0.59 + d[i * 4 + 2] * 0.11;
+      const found = C.segmentPieces(gray, w, h, { minArea: Math.max(500, Math.round((w * h) / 900)) });
+      if (found.length < 2) { toast('没从这张图里认出裁片。要黑线、白底、每片是封闭的轮廓。', true); return; }
+      const name = (file.name || '导入图纸').replace(/\.[^.]+$/, '').slice(0, 20);
+      const tpl = C.templateFromPieces('import-' + Date.now().toString(36), name, found.map((f) => ({ ...f, poly: f.poly.map(([x, y]) => [Math.round(x * 10) / 10, Math.round(y * 10) / 10]) })), w, h);
+      imports.push(tpl);
+      if (imports.length > 4) imports.shift();
+      switchTemplate(tpl.id);
+      toast(`导入了 ${tpl.pieces.length} 片。每一片的用途要你自己选，选了 3D 上才看得到。`);
+    } finally { URL.revokeObjectURL(url); }
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); toast('这张图打不开。', true); };
+  img.src = url;
+}
+function switchTemplate(id) {
+  endStroke();
+  state.template = id;
+  history.length = 0; redoStack.length = 0;
+  ui.selected = ''; ui.hover = '';
+  buildDoc(false);
+  replayAll();
+  sheet.setDoc(doc, true);
+  buildModel();
+  markAll();
+  computeStats();
+  updateHint();
+  renderDock();
+  scheduleSave();
+}
+function roleOrMaterialChanged() {
+  buildDoc(true);
+  for (const p of doc.pieces) { const r = rt[p.id]; r.zones = {}; r.overlay = {}; }
+  sheet.setDoc(doc, false);
+  buildModel();
+  markAll();
+  computeStats();
+  updateHint();
+  scheduleSave();
+}
+
+/* ============ 下面的面板 ============ */
+function field(k, label, min, max, unit) {
+  return `<div class="field"><label for="f-${k}">${label}<output id="o-${k}">${state[k]}${unit}</output></label><input type="range" id="f-${k}" data-k="${k}" data-unit="${unit}" min="${min}" max="${max}" value="${state[k]}"></div>`;
+}
+function roleOptions(sel) { return C.ROLE_KEYS.map((k) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${C.ROLES[k].label}</option>`).join(''); }
+function dockHtml() {
+  if (ui.tab === 'pattern') {
+    const cards = allTemplates().map((t) => `<button class="tpl ${state.template === t.id ? 'on' : ''}" data-tpl="${t.id}"><b>${esc(t.name)}</b><span class="lvl">${t.imported ? '导入的' : '公开图纸'}</span><p>${t.imported ? '自动从图片里拆出来的，用途要自己选。' : esc(t.note)}</p><p>${t.pieces.length} 片</p></button>`).join('');
+    const rows = doc.pieces.map((p) => `<tr class="pick ${p.id === ui.selected ? 'on' : ''}" data-pick="${p.id}"><td><span class="num">${p.label}</span></td><td>${esc(p.name)}</td>
+      <td><select data-role="${p.id}" aria-label="${esc(p.name)}的用途">${roleOptions(p.role)}</select></td>
+      <td><select data-mat="${p.id}" aria-label="${esc(p.name)}的布"><option value="skin" ${p.material === 'skin' ? 'selected' : ''}>肤色布</option><option value="hair" ${p.material === 'hair' ? 'selected' : ''}>发片布</option></select></td></tr>`).join('');
+    return `<div class="two-col"><div><h3>图纸库</h3><div class="tpl-grid" style="margin-top:8px">${cards}</div>
+      <div class="row"><button id="importBtn">导入图纸图片…</button><button id="resetRoles">恢复默认用途</button></div>
+      <div class="note-box">用的是网上流传的公开努努图纸。脸、头顶发、下巴、后脑是按“同色相缝”标注图定的，耳朵、手臂是我猜的，猜错了就在右边改「用途」。想用别的公开图纸：导入一张黑线白底的图，自动拆成一片一片。图纸的出处和授权要自己确认。</div></div>
+      <div><h3>每一片的用途和布</h3><table><tr><th>编号</th><th>名称</th><th>用途（贴在 3D 哪里）</th><th>布</th></tr>${rows}</table></div></div>`;
+  }
+  if (ui.tab === 'bom') {
+    const b = report.bom;
+    const fab = b.fabrics.map((f) => `<tr><td><span class="chip" style="background:${f.hex}"></span>${f.label} ${f.hex}</td><td>${f.pieces} 片</td><td>${f.areaCm2.toFixed(0)} cm²</td><td>${f.buyCm} cm</td></tr>`).join('');
+    const rows = b.rows.map((r) => `<tr class="pick ${r.id === ui.selected ? 'on' : ''}" data-pick="${r.id}"><td><span class="num">${r.label}</span></td><td>${esc(r.name)}</td><td>${r.w.toFixed(0)}×${r.h.toFixed(0)} mm</td><td><span class="chip" style="background:${r.hex}"></span>${r.fabric}</td><td><label><input type="checkbox" data-cut="${r.id}" ${td().cut[r.id] ? 'checked' : ''}> 已裁</label></td></tr>`).join('');
+    const done = b.rows.filter((r) => td().cut[r.id]).length;
+    return `<div class="two-col"><div><h3>面料（建议买布，含 30% 损耗，幅宽 ${C.FABRIC_WIDTH_CM} cm）</h3><table><tr><th>布</th><th>片数</th><th>面积</th><th>建议买</th></tr>${fab}</table><p style="margin-top:10px">共 ${b.pieceCount} 片，已裁 ${done}/${b.rows.length}。尺寸按脸片宽 ${state.faceMm} mm 换算。</p>
+      <div class="note-box">发片的颜色是从你涂的颜色里数出来的：一种颜色一块布，别混。点一行，这片会在图样和 3D 上亮起来。</div></div>
+      <div><h3>裁片清单</h3><table><tr><th>编号</th><th>名称</th><th>尺寸</th><th>布</th><th></th></tr>${rows}</table></div></div>`;
+  }
+  if (ui.tab === 'check') {
+    const items = report.checks.map((c) => `<li class="${c.level}"><span>${c.level === 'ok' ? '✓' : c.level === 'warn' ? '⚠' : '✗'}</span><p>${esc(c.text)}</p></li>`).join('');
+    return `<h3>导出前检查</h3><ul class="checks">${items}</ul><div class="note-box">✗ 会挡住导出，⚠ 要你点头才能导出，✓ 是通过的。守卫在你画的时候就在拦：脸只能画在脸窗里、发片只能画在发片布上、离缝线太近不让画、没裁片盖着的地方画不上。</div>`;
+  }
+  return `<div class="fields">${field('faceMm', `${doc.scaleLabel}（毫米，决定整张图纸多大）`, 30, 160, ' mm')}${field('seamMm', '缝份（裁剪线放出去多少）', 0, 12, ' mm')}${field('guardMm', '接缝保护（离缝线多远不让画）', 0, 8, ' mm')}</div>
+    <div class="row"><span style="font-size:12px">肤色布</span>${SKINS.map((c) => `<button class="swatch ${state.skin === c ? 'on' : ''}" data-skin="${c}" style="background:${c}" aria-label="布色 ${c}"></button>`).join('')}<input type="color" id="skinCustom" value="${state.skin}" aria-label="自定义布色"></div>
+    <div class="row"><button id="clearAll">清空这份图纸上所有笔迹（撤销不了，慎点）</button></div>
+    <div class="note-box">原图没有标尺，真实大小由上面的宽度决定：先量你想要的脸片宽度填进去，打印出来再用 5 cm 校准尺核对一遍。裁出来的布会有形变，先用便宜布试缝，再裁正式布料。</div>`;
+}
+function renderDock() {
+  if (!report) return;
+  $('#dockBody').innerHTML = dockHtml();
+  wireDock();
+}
+function highlightRow() { $$('#dockBody tr.pick').forEach((tr) => tr.classList.toggle('on', tr.dataset.pick === ui.selected)); }
+function wireDock() {
+  $$('#dockBody [data-k]').forEach((el) => {
+    el.oninput = () => {
+      const k = el.dataset.k;
+      state[k] = +el.value;
+      $('#o-' + k).textContent = el.value + el.dataset.unit;
+      if (k === 'faceMm' || k === 'guardMm') for (const p of doc.pieces) { const r = rt[p.id]; r.zones = {}; r.overlay = {}; }
+      if (k !== 'guardMm') cutCache.clear();
+      markAll();
+      computeReport();
+      updateHint();
+      scheduleSave();
+    };
+  });
+  $$('#dockBody [data-skin]').forEach((b) => { b.onclick = () => { state.skin = b.dataset.skin; if (model) model.setSkin(state.skin); markAll(); computeReport(); renderDock(); scheduleSave(); }; });
+  const sc = $('#skinCustom');
+  if (sc) sc.oninput = () => { state.skin = sc.value; if (model) model.setSkin(state.skin); markAll(); scheduleSave(); };
+  const clear = $('#clearAll');
+  if (clear) clear.onclick = () => {
+    if (!confirm('清空这份图纸上所有笔迹？这一步撤销不了。')) return;
+    td().strokes = []; history.length = 0; redoStack.length = 0;
+    for (const p of doc.pieces) { const r = rt[p.id]; r.layers = {}; }
+    markAll(); computeStats(); scheduleSave(); renderDock();
+  };
+  $$('#dockBody [data-tpl]').forEach((b) => { b.onclick = () => { if (state.template !== b.dataset.tpl) switchTemplate(b.dataset.tpl); }; });
+  const imp = $('#importBtn');
+  if (imp) imp.onclick = () => $('#importFile').click();
+  const reset = $('#resetRoles');
+  if (reset) reset.onclick = () => { td().roles = {}; td().materials = {}; roleOrMaterialChanged(); renderDock(); toast('用途和布都恢复成默认的了'); };
+  $$('#dockBody [data-role]').forEach((s) => {
+    s.onchange = () => {
+      const id = s.dataset.role;
+      td().roles[id] = s.value;
+      delete td().materials[id]; // 换用途时，布跟着用途走
+      roleOrMaterialChanged();
+      renderDock();
+    };
+  });
+  $$('#dockBody [data-mat]').forEach((s) => { s.onchange = () => { td().materials[s.dataset.mat] = s.value; roleOrMaterialChanged(); renderDock(); }; });
+  $$('#dockBody [data-pick]').forEach((tr) => { tr.onclick = (e) => { if (e.target.closest('label,input,select,button')) return; selectPiece(tr.dataset.pick); }; });
+  $$('#dockBody [data-cut]').forEach((cb) => { cb.onchange = () => { td().cut[cb.dataset.cut] = cb.checked; scheduleSave(); renderDock(); }; });
+}
+
+/* ============ 工具条 ============ */
+function renderSwatches() {
+  const list = ui.layer === 'hair' ? state.hairPalette : INK;
+  const now = ui.layer === 'hair' ? ui.hair : ui.ink;
+  $('#swatches').innerHTML = list.map((c) => `<button class="swatch ${c.toLowerCase() === now.toLowerCase() ? 'on' : ''}" data-c="${c}" style="background:${c}" aria-label="颜色 ${c}"></button>`).join('');
+  $$('#swatches [data-c]').forEach((b) => { b.onclick = () => setColor(b.dataset.c); });
+  $('#customColor').value = now;
+}
+function setColor(c) {
+  if (ui.layer === 'hair') {
+    ui.hair = c;
+    if (!state.hairPalette.some((p) => p.toLowerCase() === c.toLowerCase())) {
+      state.hairPalette.push(c);
+      if (state.hairPalette.length > 8) state.hairPalette.shift();
+      scheduleSave();
+    }
+  } else ui.ink = c;
+  ui.tool = 'pen';
+  syncTool();
+  renderSwatches();
+}
+function syncTool() {
+  $('#toolPen').classList.toggle('on', ui.tool === 'pen');
+  $('#toolEraser').classList.toggle('on', ui.tool === 'eraser');
+}
+function setupToolbar() {
+  $$('[data-layer]').forEach((b) => {
+    b.onclick = () => {
+      ui.layer = b.dataset.layer;
+      $$('[data-layer]').forEach((x) => x.classList.toggle('on', x === b));
+      renderSwatches(); updateHint(); if (ui.zones) markAll();
+    };
+  });
+  $('#toolPen').onclick = () => { ui.tool = 'pen'; syncTool(); };
+  $('#toolEraser').onclick = () => { ui.tool = 'eraser'; syncTool(); };
+  $('#customColor').oninput = (e) => setColor(e.target.value);
+  const size = $('#brushSize');
+  size.oninput = () => { ui.size = +size.value; $('#brushOut').textContent = `${ui.size} mm`; };
+  $('#mirror').onchange = (e) => { ui.mirror = e.target.checked; };
+  $('#seamGuard').onchange = (e) => { ui.seamGuard = e.target.checked; updateHint(); if (ui.zones) markAll(); if (!ui.seamGuard) toast('接缝保护关了：靠近缝线的笔画会在检查里标出警告', true); };
+  $('#showZones').onchange = (e) => { ui.zones = e.target.checked; markAll(); };
+  $('#showGuides').onchange = (e) => { ui.guides = e.target.checked; markAll(); };
+  $('#showSeams').onchange = (e) => { ui.seams = e.target.checked; markAll(); };
+  $('#undo').onclick = undo;
+  $('#redo').onclick = redo;
+  window.addEventListener('keydown', (e) => {
+    const t = document.activeElement;
+    if (/INPUT|TEXTAREA|SELECT/.test(t.tagName) && t.type !== 'range' && t.type !== 'checkbox') return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+    else if (e.key === 'e' || e.key === 'E') { ui.tool = ui.tool === 'eraser' ? 'pen' : 'eraser'; syncTool(); }
+  });
+  $$('.tabs [data-tab]').forEach((b) => {
+    b.onclick = () => { ui.tab = b.dataset.tab; $$('.tabs [data-tab]').forEach((x) => x.classList.toggle('on', x === b)); renderDock(); };
+  });
+  const pn = $('#projectName');
+  pn.value = state.name;
+  pn.oninput = () => { state.name = pn.value || '我的努努'; scheduleSave(); };
+  $('#btnSave').onclick = () => save(true);
+  const menu = $('#exportMenu'), btn = $('#btnExport');
+  btn.onclick = (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; btn.setAttribute('aria-expanded', String(!menu.hidden)); updateExportGate(); };
+  document.addEventListener('click', (e) => { if (!menu.hidden && !e.target.closest('.menu-wrap')) { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); } });
+  $('#ack').onchange = updateExportGate;
+  $('#exportSvg').onclick = exportSvg;
+  $('#exportPng').onclick = exportPng;
+  $('#exportBom').onclick = () => { download(`${safeName()}-备料单.txt`, new Blob([bomText()], { type: 'text/plain;charset=utf-8' })); toast('备料单已导出'); };
+  $('#importFile').onchange = (e) => { const f = e.target.files && e.target.files[0]; if (f) importImage(f); e.target.value = ''; };
+  window.addEventListener('resize', () => { if (sheet) { sheet.resize(); sheet.fit(); } if (model) model.resize(); dirty.scene = true; markSheet(); });
+}
+
+/* ============ 启动 ============ */
+function init() {
+  buildDoc(false);
+  replayAll();
+  setupToolbar();
+  renderSwatches();
+  syncTool();
+  setupSheet();
+  setupModel();
+  for (const p of doc.pieces) compose(p);
+  computeStats();
+  updateHint();
+  sheet.fit();
+  renderDock();
+  markAll();
+  // 调试 / 测试用
+  window.__nunu = {
+    state, ui, rt, C, history,
+    get doc() { return doc; }, get stats() { return stats; }, get report() { return report; }, sheet, model,
+    startStroke, feed, endStroke, undo, redo, computeStats, selectPiece, switchTemplate, importImage, pointCheck, zoneOf, compose, td,
+  };
+}
+init();
+})();

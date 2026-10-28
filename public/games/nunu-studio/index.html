@@ -1,8 +1,100 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>努努制作台 · 把想象缝成陪伴</title><link rel="stylesheet" href="style.css"></head><body>
-<header><a class="brand" href="./"><span class="brand-icon">✿</span><span>努努制作台<small>NUNU ATELIER</small></span></a><nav><span class="nav-active">我的制作台</span><button id="help">缝制小指南 ↗</button></nav><div class="header-right"><span id="saveStatus">● 已保存在此浏览器</span><button id="save">保存设计</button><button class="primary" id="exportTop">↓ 导出纸样</button></div></header>
-<main><section class="intro"><div><div class="eyebrow">A LITTLE STITCH, A LITTLE MAGIC</div><h1>把想象，缝成小小的陪伴<span>✳</span></h1><p>从一个轮廓开始，做一只独一无二的努努。</p></div><span class="project-label">✎ <input id="projectName" aria-label="作品名称" value="我的第一只努努"></span></section>
-<div class="workspace"><aside class="editor"><div class="tabs"><button data-tab="body" class="active">♧<span>体型</span></button><button data-tab="face">◡<span>脸部</span></button><button data-tab="hair">♧<span>发片</span></button><button data-tab="pattern">▧<span>纸样</span></button></div><div id="controls"></div><div class="aside-note">✧ 每一点小调整，都是你的风格。</div></aside>
-<section class="stage"><div class="stage-top"><div class="view-switch"><button class="active" data-view="doll">努努预览</button><button data-view="pieces">平面拆分</button></div><span class="live-dot">实时联动</span></div><div id="artboard"><svg id="doll" viewBox="0 0 560 600" aria-label="努努正面设计预览"></svg><div id="piecesPreview" hidden></div><div class="height-guide"><span id="heightLabel">20 cm</span></div><span class="canvas-caption">MADE BY YOU, WITH LOVE</span></div><div class="stage-bottom"><span>正面 · 造型示意</span><div><button id="zoomOut" aria-label="缩小">−</button><span id="zoomLabel">100%</span><button id="zoomIn" aria-label="放大">＋</button><button id="resetZoom" aria-label="重置缩放">⌖</button></div><span>✧ 你的灵感正在成形</span></div></section>
-<aside class="details"><div class="section-heading"><h2>这只努努的档案</h2><span>01</span></div><div class="material-card"><div class="fabric-art">✿</div><div><b>软乎乎，刚刚好</b><p>属于你的手作小伙伴</p></div></div><dl><div><dt>成品参考高度</dt><dd id="summaryHeight">20 cm</dd></div><div><dt>体型风格</dt><dd id="summaryStyle">圆滚滚</dd></div><div><dt>布料颜色</dt><dd><i id="colorDot"></i><span id="colorName">奶油白</span></dd></div><div><dt>纸样缝份</dt><dd id="summarySeam">5 mm</dd></div></dl><div class="divider"></div><div class="section-heading"><h2>从屏幕到手心</h2><span>↘</span></div><ol class="steps"><li><span>1</span><div><b>捏一捏，画一画</b><p>调整体型，画上专属表情</p></div></li><li><span>2</span><div><b>拆成一片片灵感</b><p>查看身体、脸部和发片纸样</p></div></li><li><span>3</span><div><b>一针一线，见面吧</b><p>原尺寸打印，先用余布试缝</p></div></li></ol><div class="tip"><span>✦ 制作台的小提醒</span><p>这里生成的是平面双片式布偶参考纸样，尚未实物打样。填充后尺寸会变化，先试缝再微调会更合适。</p></div><button class="export-side primary" id="exportSide">↓ 下载 SVG 纸样 <span>↗</span></button><p class="export-note">含缝线、裁剪线与 5 cm 校准尺</p></aside></div>
-<footer><span>✿ 慢慢做，让喜欢有形状。</span><span>NUNU ATELIER · YOUR LITTLE CREATION SPACE</span></footer></main><div id="toast" role="status"></div><dialog id="guide"><h2>从纸样到你的努努 🧵</h2><p>这是双片式软布偶：头部、身体、手臂和腿部分别正反两片缝合，再连接。它不是立体多裁片棉花娃娃的自动打版工具。</p><p>① 下载 SVG 后按 100% 原尺寸打印，核对 5 cm 校准尺。大图可用支持海报分页的软件打印。</p><p>② 外侧浅色轮廓为裁剪线，内侧虚线为缝线。按标注裁布，留出返口，翻面填充后藏针缝合。</p><p>③ 脸部图案可描到头部前片，发片按需要使用不织布或布料。先用余布试做，调整连接位置与填充量。</p><button class="primary" id="closeGuide">知道啦</button></dialog><script src="app.js"></script></body></html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>努努赛博定制台 · 图样与裸娃实时联动</title>
+<meta name="description" content="用公开的努努图纸：在图样上画脸，在 3D 裸娃上画发片，两边实时互相投射；自动防止画错地方和备料错误。">
+<link rel="stylesheet" href="style.css?v=5">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/" aria-label="回到游戏盒子"><span>✿</span><div>努努赛博定制台<small>NUNU CYBER ATELIER</small></div></a>
+  <div class="project">
+    <input id="projectName" aria-label="作品名称" maxlength="40">
+    <span id="saveStatus">保存在此浏览器</span>
+  </div>
+  <div class="actions">
+    <button id="btnSave" type="button">保存</button>
+    <div class="menu-wrap">
+      <button id="btnExport" type="button" class="primary" aria-haspopup="true" aria-expanded="false">导出 ▾</button>
+      <div id="exportMenu" class="menu" hidden>
+        <button type="button" id="exportSvg">纸样 SVG（1:1，毫米）</button>
+        <button type="button" id="exportPng">彩色图样 PNG</button>
+        <button type="button" id="exportBom">备料单 TXT</button>
+        <label class="ack" id="ackWrap" hidden><input type="checkbox" id="ack"> 我已看过检查里的警告</label>
+        <p class="menu-note" id="exportNote"></p>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="toolbar" aria-label="画笔和守卫">
+  <div class="group" role="group" aria-label="画在哪一层">
+    <button type="button" data-layer="face" class="seg on" title="眼睛、嘴：只能画在脸片的脸窗里">脸</button>
+    <button type="button" data-layer="skin" class="seg" title="腮红、花纹：画在肤色布的裁片上">彩绘</button>
+    <button type="button" data-layer="hair" class="seg" title="后发：给头顶发、后脑涂色（缝上去）；前发：画在脸片的额头上（贴上去）">发片</button>
+  </div>
+  <div class="group" role="group" aria-label="工具">
+    <button type="button" id="toolPen" class="seg on">✎ 画笔</button>
+    <button type="button" id="toolEraser" class="seg">橡皮擦</button>
+  </div>
+  <div class="group swatch-group"><div id="swatches" class="swatches"></div><input type="color" id="customColor" aria-label="自定义颜色" value="#4b3939"></div>
+  <label class="size">笔 <input type="range" id="brushSize" min="0.5" max="30" step="0.5" value="3"><output id="brushOut">3 mm</output></label>
+  <div class="group toggles">
+    <label><input type="checkbox" id="mirror" checked> 左右对称</label>
+    <label title="离缝线太近的地方不让画"><input type="checkbox" id="seamGuard" checked> 接缝保护</label>
+    <label><input type="checkbox" id="showZones"> 显示不能画的地方</label>
+    <label><input type="checkbox" id="showGuides" checked> 眼嘴参考框</label>
+    <label><input type="checkbox" id="showSeams" checked> 缝线 / 记号</label>
+  </div>
+  <div class="group">
+    <button type="button" id="undo" title="撤销">↶</button>
+    <button type="button" id="redo" title="重做">↷</button>
+  </div>
+  <p id="layerHint" class="layer-hint" role="status"></p>
+</section>
+
+<main class="workspace">
+  <section class="panel" id="sheetPanel">
+    <div class="panel-head">
+      <div><span class="number">01</span><b>图样</b><small>公开努努图纸，在裁片上画，3D 立刻跟着变</small></div>
+      <div class="mini"><button type="button" id="zoomOut" aria-label="缩小">−</button><button type="button" id="zoomFit">适应</button><button type="button" id="zoomIn" aria-label="放大">＋</button></div>
+    </div>
+    <div class="stage"><canvas id="sheet" aria-label="图样：每一片裁片，可以直接在上面画"></canvas></div>
+    <p class="caption">实线是缝线，虚线是裁剪线（含缝份），蓝色虚线是脸窗和眼嘴参考框。点一片选中，它在 3D 上会亮起来；右键拖动平移，滚轮缩放。</p>
+  </section>
+  <section class="panel" id="modelPanel">
+    <div class="panel-head">
+      <div><span class="number">02</span><b>3D 裸娃</b><small>在娃娃身上画，图样立刻跟着变</small></div>
+      <div class="mini">
+        <button type="button" id="modePaint" class="on">画</button><button type="button" id="modeRotate">转</button>
+        <button type="button" data-view="0">正</button><button type="button" data-view="1.5708">侧</button><button type="button" data-view="3.1416">背</button>
+      </div>
+    </div>
+    <div class="stage"><canvas id="model" aria-label="3D 娃娃，可以直接在上面画"></canvas><div id="modelError" hidden>这个浏览器没有开 3D，打开 WebGL 就能看到娃娃。图样这边照常能用。</div></div>
+    <p class="caption">「画」模式下左键画，右键拖动转；「转」模式下左键拖动转、点一下选中那一片；滚轮缩放。没有裁片盖着的地方（裸露的娃娃）画不上去。</p>
+  </section>
+</main>
+
+<section class="dock" aria-label="图纸、备料、检查、设置">
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="pattern" class="on">图纸</button>
+    <button type="button" role="tab" data-tab="bom">备料 <i id="bomBadge"></i></button>
+    <button type="button" role="tab" data-tab="check">检查 <i id="checkBadge"></i></button>
+    <button type="button" role="tab" data-tab="setup">设置</button>
+  </div>
+  <div id="dockBody" class="dock-body"></div>
+</section>
+
+<input type="file" id="importFile" accept="image/*" hidden>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="../ice-cream-latte/three.min.js"></script>
+<script src="nunu-shape.js?v=5"></script>
+<script src="pattern-data.js?v=5"></script>
+<script src="nunu-core.js?v=5"></script>
+<script src="model3d.js?v=5"></script>
+<script src="sheet.js?v=5"></script>
+<script src="app.js?v=5"></script>
+</body>
+</html>
