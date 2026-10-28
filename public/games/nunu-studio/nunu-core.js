@@ -10,7 +10,8 @@ const TAU = Math.PI * 2, D2R = Math.PI / 180;
 /* ============ 用途表：每一片贴在 3D 的哪里 ============ */
 /* target：贴在哪个部件上；cap = 以正前方为中心的圆形盖（脸）；box = 把裁片外接框展成经纬度的一块（phi 经度，theta 从头顶数的纬度）
  * 经度 phi：0 是正前，90 度是画面右边，180 度是正后；u 从左到右增加就是 phi 增加（从外面看这片）。off：比底层多凸出去多少，免得和底层打架。 */
-const HEAD_OFF = 0.02; // 头上的片都贴在同一层，拼起来才是连续的
+const HEAD_OFF = 0.02;
+const BOARD_CAP = 76; // 前发画板的圆盘边缘离正前方多少度（脸盖是 64，画板大一圈，前发可以盖到脸盖外面） // 头上的片都贴在同一层，拼起来才是连续的
 const ROLES = {
   none: { label: '不上 3D', material: 'skin', target: null },
   face: { label: '脸', material: 'skin', target: 'head', kind: 'cap', alpha: 64, off: HEAD_OFF, face: true },
@@ -163,17 +164,32 @@ const dirOf = (phiDeg, thetaDeg) => {
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 function capOf(piece) { const b = piece.box; return { cx: b.x + b.w / 2, cy: b.y + b.h / 2, rx: b.w / 2, ry: b.h / 2 }; }
 
+/** 圆盖：外接框是椭圆，中心朝正前，边缘离正前 alpha 度（方位等距，圆贴上去还是圆） */
+function capDir(piece, x, y, alpha) {
+  const c = capOf(piece);
+  const ex = (x - c.cx) / c.rx, ey = (y - c.cy) / c.ry, len = Math.hypot(ex, ey), r = Math.min(1, len);
+  if (len < 1e-9) return [0, 0, 1];
+  const a = r * alpha * D2R, s = Math.sin(a);
+  return [(s * ex) / len, (-s * ey) / len, Math.cos(a)];
+}
+/** 后发画板：把后脑展开成一张长方形——左半是左后脑（红边在最左），右半是右后脑（红边在最右），黄边在正中；从上到下是纬度 */
+function backDir(piece, x, y) {
+  const b = piece.box, u = clamp01((x - b.x) / b.w), v = clamp01((y - b.y) / b.h), h = piece.head;
+  const th = h.thetaTop + (h.thetaBottom - h.thetaTop) * v, edge = lerpAt(h.phiEdge, th / 180);
+  const phi = u < 0.5 ? -(edge + (180 - edge) * (u / 0.5)) : 180 - (180 - edge) * ((u - 0.5) / 0.5);
+  return dirOf(phi, th);
+}
+
 /** 裁片上的一点 → 单位方向（在它所属部件的椭球上）；这一片没有用途就返回 null。脸片这种圆盖用「方位等距」，圆贴上去还是圆 */
 function pieceDir(piece, x, y) {
+  if (piece.role === 'board') {
+    if (piece.board === 'front') return capDir(piece, x, y, BOARD_CAP);
+    if (piece.board === 'back') return backDir(piece, x, y);
+    return null;
+  }
   const role = ROLES[piece.role];
   if (!role || !role.target || role.kind === 'pillow') return null;
-  if (role.kind === 'cap') {
-    const c = capOf(piece);
-    const ex = (x - c.cx) / c.rx, ey = (y - c.cy) / c.ry, len = Math.hypot(ex, ey), r = Math.min(1, len);
-    if (len < 1e-9) return [0, 0, 1];
-    const a = r * role.alpha * D2R, s = Math.sin(a);
-    return [(s * ex) / len, (-s * ey) / len, Math.cos(a)];
-  }
+  if (role.kind === 'cap') return capDir(piece, x, y, role.alpha);
   const b = piece.box;
   const u = clamp01((x - b.x) / b.w), v = clamp01((y - b.y) / b.h);
   if (role.kind === 'leaf') {
@@ -287,7 +303,8 @@ function layerRule(piece, layer) {
     return { ok: true };
   }
   // 后发（头顶发、后脑）是缝上去的发片布；前发直接做成贴布贴在脸片的额头上，所以脸片的额头那一块也能画发片
-  if (piece.material !== 'hair' && piece.role !== 'face') return { ok: false, reason: `${piece.name}是肤色布，不是发片。「发片」层画在头顶发、后脑这类缝上去的发片裁片上，或者脸片的额头（前发）。` };
+  if (piece.role === 'face') return { ok: false, reason: '前发不直接画在脸片上，它是脑袋上面另起的一层：把「发片画在」选成「前发」，画在前发发片画板上（3D 上也能直接画）。' };
+  if (piece.material !== 'hair') return { ok: false, reason: `${piece.name}是肤色布，不是发片。「发片」层的「底布」只能涂在头顶发、后脑这类发片布裁片上；前发、后发、上面的发片请选对应的画板。` };
   return { ok: true };
 }
 
@@ -296,16 +313,6 @@ function buildZone(doc, piece, layer, marginPx) {
   const src = layer === 'face' && doc.guides ? doc.guides.lens : piece.poly;
   const { bm } = Shape.rasterizePolygon(src, 1, 0);
   const b = boxOfPoly(src);
-  if (layer === 'hair' && piece.role === 'face' && doc.guides) {
-    // 前发：脸片里、脸窗（发际线以下）以外的那一块，一直可以画到脸片边上（贴布是先贴再缝的）
-    const lens = Shape.rasterizePolygon(doc.guides.lens, 1, 0), lb = boxOfPoly(doc.guides.lens);
-    for (let y = 0; y < bm.h; y++) for (let x = 0; x < bm.w; x++) {
-      if (!bm.data[y * bm.w + x]) continue;
-      const lx = Math.floor(x + b.x - lb.x + 0.5), ly = Math.floor(y + b.y - lb.y + 0.5);
-      if (lx >= 0 && ly >= 0 && lx < lens.bm.w && ly < lens.bm.h && lens.bm.data[ly * lens.bm.w + lx]) bm.data[y * bm.w + x] = 0;
-    }
-    return { bx: b.x - 1, by: b.y - 1, w: bm.w, h: bm.h, data: bm.data };
-  }
   const m = layer === 'hair' ? 0 : marginPx;
   const mask = m > 0 ? Shape.erode(bm, m) : bm;
   return { bx: b.x - 1, by: b.y - 1, w: mask.w, h: mask.h, data: mask.data };
@@ -396,10 +403,23 @@ function templateFromPieces(id, name, pieces, w, h) {
   return { id, name, w, h, axis, faceWidthPx: widest, imported: true, scaleLabel: '最大一片的宽度', pieces: list.map(({ id: pid, name: pn, role, poly }) => ({ id: pid, name: pn, role, poly })), pairs: findPairs(list, axis, w, h), guides: null };
 }
 
-/** 发片画板：图样右边的一块空白画布（图纸像素），自由画发片形状；它不是裁片，所以 role 是 board */
-function makeBoardPiece(x, y, w, h) {
-  const poly = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]], box = { x, y, w, h };
-  return { id: 'board', index: -1, label: '板', name: '发片画板', role: 'board', material: 'skin', poly, box, area: w * h, partner: null, axis: x + w / 2, pxPerDeg: 1, faceWidthPx: 0, edges: null, rows: null, head: null };
+/** 三块发片画板（图样右边的空白区）。发片都是脑袋上面另起的一层，不是裁片，所以 role 是 board：
+ *  前发：一个圆盘，中心朝正前，比脸盖大一圈（盖到 76°），上面描着脸盖和发际线当参考；贴在 3D 脑袋前面的一层
+ *  后发：后脑展开的长方形，左右两半各对一片后脑，黄边在正中；贴在 3D 脑袋后面的一层
+ *  上面：一块自由画布，画翘出脑袋的发片，黏在头顶
+ * 返回 { boards:[…], strip:{x,y,w}, w, h }：strip 是画出来的发片裁片排版的起点 */
+function makeBoards(doc) {
+  const k = BOARD_CAP / ROLES.face.alpha, face = doc.pieces.find((p) => p.role === 'face');
+  const fc = face ? capOf(face) : { cx: 585, cy: 300, rx: 160.7, ry: 153.9 };
+  const rx = fc.rx * k, ry = fc.ry * k, gap = 30, x0 = doc.w + 30, y0 = 24;
+  const make = (id, kind, name, x, y, w, h, poly, extra = {}) => ({ id, index: -1, label: '板', name, role: 'board', board: kind, material: 'skin', poly, box: { x, y, w, h }, area: w * h, partner: null, axis: x + w / 2, pxPerDeg: 1, faceWidthPx: doc.faceWidthPx, edges: null, rows: null, head: doc.head, ...extra });
+  const ell = (cx, cy, a, b, n = 72) => Array.from({ length: n }, (_, i) => { const t = (i / n) * TAU; return [cx + a * Math.cos(t), cy + b * Math.sin(t)]; });
+  const fw = Math.ceil(rx * 2), fh = Math.ceil(ry * 2), cx = x0 + fw / 2, cy = y0 + fh / 2;
+  const front = make('board-front', 'front', '前发发片', x0, y0, fw, fh, ell(cx, cy, rx, ry), { faceCenter: [fc.cx, fc.cy], faceR: [fc.rx, fc.ry] });
+  const topW = 480, topH = 260, top = make('board-top', 'top', '上面发片', x0, y0 + fh + gap, topW, topH, [[x0, y0 + fh + gap], [x0 + topW, y0 + fh + gap], [x0 + topW, y0 + fh + gap + topH], [x0, y0 + fh + gap + topH]]);
+  const bx = x0 + Math.max(fw, topW) + gap, bw = 480, bh = 380, back = make('board-back', 'back', '后发发片', bx, y0, bw, bh, [[bx, y0], [bx + bw, y0], [bx + bw, y0 + bh], [bx, y0 + bh]]);
+  const boards = [front, back, top];
+  return { boards, strip: { x: bx, y: y0 + bh + gap, w: bw }, w: bx + bw + gap, h: Math.max(top.box.y + topH, y0 + bh) + gap };
 }
 
 /** 画布分辨率的位图（1 = 画了）→ 一块块的轮廓（图纸坐标）。box 是这张位图对应的图纸范围 */
@@ -490,7 +510,7 @@ function checks(doc, stats, ctx = {}) {
   }
   for (const p of doc.pieces.filter((q) => q.material === 'hair')) {
     const st = stats[p.id] || {}, cov = st.coverage || 0;
-    if (cov < 0.05) { bad = true; add('error', `${p.label} ${p.name}还没上色：发片布的颜色就是你涂的颜色，没涂就不知道该备什么布。`); continue; }
+    if (cov < 0.05) { add('warn', `${p.label} ${p.name}还没涂底色：它是缝在脑袋上的发片布，备料不知道买什么颜色。去「发片画在 → 底布」把它涂满。`); continue; }
     if (cov < 0.9) add('warn', `${p.label} ${p.name}只涂了 ${Math.round(cov * 100)}%，没涂的地方会露出底布。先用大笔刷把底色涂满，再在上面画别的颜色的发片。`);
     const n = (st.colors || []).length;
     if (n > 2) add('warn', `${p.label} ${p.name}用了 ${n} 种颜色：每一种都要单独裁一小块布再拼，缝起来会很碎。`);
@@ -528,7 +548,7 @@ const api = {
   TAU, ROLES, ROLE_KEYS, TARGETS, PILLOWS, PILLOW_ROUND, unitPerPx, LAYERS, LAYER_NAMES, FABRIC_WIDTH_CM,
   inPoly, boxOfPoly, areaOfPoly, smoothPoly, makeDoc, labelOf, mirrorOf,
   pieceDir, capOf, dirOf, targetPoint, targetNormal, pillowMesh,
-  layerRule, buildZone, zoneAt, zoneLoops, segmentPieces, findPairs, templateFromPieces, maskToPolys, polyThickness, packStrip, makeBoardPiece,
+  layerRule, buildZone, zoneAt, zoneLoops, segmentPieces, findPairs, templateFromPieces, maskToPolys, polyThickness, packStrip, makeBoards, capDir, backDir, BOARD_CAP,
   mmPerPx, px2cm2, bom, checks, colorDist,
 };
 root.NunuCore = api;

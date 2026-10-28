@@ -115,7 +115,8 @@ test('层规则：脸只能画在脸片，发片只能画在发片布，彩绘�
   assert.equal(C.layerRule(d.byId.bodyA, 'face').ok, false);
   assert.equal(C.layerRule(d.byId.big, 'hair').ok, true);
   assert.equal(C.layerRule(d.byId.top, 'hair').ok, false, '下巴是肤色布');
-  assert.equal(C.layerRule(d.byId.face, 'hair').ok, true, '前发直接画在脸片额头上');
+  assert.equal(C.layerRule(d.byId.face, 'hair').ok, false, '前发不直接画在脸片上，是另起一层');
+  assert.match(C.layerRule(d.byId.face, 'hair').reason, /前发/);
   assert.equal(C.layerRule(d.byId.bodyA, 'hair').ok, false);
   assert.match(C.layerRule(d.byId.bodyA, 'hair').reason, /肤色布/);
   assert.equal(C.layerRule(d.byId.top, 'hair').ok, false, '下巴不能画发片');
@@ -172,7 +173,7 @@ test('检查：发片没上色是错误，肤色布上有发片色是「备料�
   assert.equal(ok.filter((c) => c.level === 'error').length, 0, JSON.stringify(ok));
   assert.ok(ok.some((c) => c.level === 'ok' && /没有备料错误/.test(c.text)));
   const empty = C.checks(d, { ...full, big: { coverage: 0, colors: [] } }, {});
-  assert.ok(empty.some((c) => c.level === 'error' && /头顶发/.test(c.text)));
+  assert.ok(empty.some((c) => c.level === 'warn' && /头顶发/.test(c.text) && /底色/.test(c.text)));
   const wrong = C.checks(d, { ...full, bodyA: { hairInk: 30 } }, {});
   assert.ok(wrong.some((c) => c.level === 'error' && /备料错误/.test(c.text) && /身体·前/.test(c.text)));
   const part = C.checks(d, { ...full, big: { coverage: 0.5, colors: [{ hex: '#7d594a', frac: 1 }] } }, {});
@@ -287,29 +288,6 @@ test('手臂袋子：直边朝身体、贴在身体肩膀的侧边；前后两�
   assert.ok(nz(C.pillowMesh(d.byId.bodyA, d)) > 0 && nz(C.pillowMesh(d.byId.bodyB, d)) < 0);
 });
 
-test('前发：脸片额头（脸窗以外）能画发片，脸窗里不能，一直画到脸片边上；备料里算一块贴布，不算备料错误', () => {
-  const d = doc(), f = d.byId.face, c = C.capOf(f);
-  const z = C.buildZone(d, f, 'hair', 12);
-  assert.equal(C.zoneAt(z, 585, 190), true, '额头能画前发');
-  assert.equal(C.zoneAt(z, c.cx, c.cy - c.ry + 3), true, '前发能画到脸片的边上');
-  assert.equal(C.zoneAt(z, 585, 380), false, '脸窗里不能画前发');
-  assert.equal(C.zoneAt(z, 585, 300), false, '发际线以下不能画前发');
-  assert.equal(C.zoneAt(z, 5, 5), false);
-  const zf = C.buildZone(d, f, 'face', 0);
-  let both = 0;
-  for (let y = 120; y < 470; y += 3) for (let x = 400; x < 770; x += 3) if (C.zoneAt(z, x, y) && C.zoneAt(zf, x, y)) both++;
-  assert.ok(both < 100, `脸窗里画脸、额头上画发片，两块只在发际线那一像素宽的线上相碰：${both}`);
-  const stats = {};
-  for (const p of d.pieces.filter((q) => q.material === 'hair')) stats[p.id] = { coverage: 1, colors: [{ hex: '#7d594a', frac: 1 }] };
-  stats.face = { faceInk: 300, faceOutside: 0, hairInk: 4000, hairAreaPx: 6000, coverage: 0.2, colors: [{ hex: '#2a2a3a', frac: 1 }] };
-  const b = C.bom(d, stats, { faceMm: 100, skin: '#f1dfcd' });
-  assert.ok(!b.fabrics.some((x) => x.hex === '#2a2a3a'), '没有派生发片时，脸片上的发片色不单独算布');
-  assert.equal(C.checks(d, stats, {}).filter((x) => x.level === 'error').length, 0);
-  const many = C.checks(d, { ...stats, face: { ...stats.face, colors: [{ hex: '#111111', frac: 0.4 }, { hex: '#222222', frac: 0.3 }, { hex: '#333333', frac: 0.3 }] } }, {});
-  assert.ok(many.some((x) => x.level === 'warn' && /前发/.test(x.text)));
-  assert.ok(C.checks(d, { ...stats, bodyA: { hairInk: 20 } }, {}).some((x) => x.level === 'error' && /备料错误/.test(x.text)));
-});
-
 test('画出来的发片：位图 → 一块块轮廓（图纸坐标）；太细的、太小的会被检查标出来；排到图样右边', () => {
   // 一块 40×20 的长条和一块 10×10 的小方块，画布是图纸的 2 倍分辨率
   const bm = { w: 200, h: 100, data: new Uint8Array(200 * 100) };
@@ -348,17 +326,28 @@ test('画出来的发片：位图 → 一块块轮廓（图纸坐标）；太细
   assert.ok(!warn.some((x) => /发5/.test(x.text)));
 });
 
-test('发片画板：不是裁片，只能画发片；画板上的每块颜色是黏在头顶的发片', () => {
-  const b = C.makeBoardPiece(1200, 24, 520, 300);
-  assert.equal(b.role, 'board');
-  assert.equal(C.layerRule(b, 'hair').ok, true);
-  assert.equal(C.layerRule(b, 'face').ok, false);
-  assert.equal(C.layerRule(b, 'skin').ok, false);
-  assert.match(C.layerRule(b, 'skin').reason, /发片/);
-  const z = C.buildZone(doc(), b, 'hair', 12);
-  assert.equal(C.zoneAt(z, 1210, 30), true, '画板边上也能画');
-  assert.equal(C.zoneAt(z, 1100, 100), false, '画板外面不能画');
-  assert.equal(C.zoneAt(z, 1400, 400), false);
-  const m = C.mirrorOf({ byId: { board: b } }, 'board', 1300, 100);
-  assert.equal(m.pieceId, 'board'); near(m.x, 2 * (1200 + 260) - 1300, 1e-9);
+test('三块发片画板：前发是比脸盖大一圈的圆盘，后发是后脑展开的长方形，上面是自由画布；位置互不重叠，都在图纸右边', () => {
+  const d = doc(), m = C.makeBoards(d), [front, back, top] = m.boards;
+  assert.equal(m.boards.map((b) => b.board).join(), 'front,back,top');
+  for (const b of m.boards) { assert.equal(b.role, 'board'); assert.ok(b.box.x >= d.w + 20, `${b.id} 在图纸右边`); assert.equal(C.layerRule(b, 'hair').ok, true); assert.equal(C.layerRule(b, 'face').ok, false); assert.equal(C.layerRule(b, 'skin').ok, false); }
+  const hit = (a, b) => !(a.box.x + a.box.w <= b.box.x || b.box.x + b.box.w <= a.box.x || a.box.y + a.box.h <= b.box.y || b.box.y + b.box.h <= a.box.y);
+  assert.ok(!hit(front, back) && !hit(front, top) && !hit(back, top));
+  assert.ok(m.strip.y >= back.box.y + back.box.h && m.strip.x === back.box.x, '发片裁片排在后发画板下面');
+  assert.ok(m.w > d.w + 900 && m.h > 600);
+  const f = d.byId.face, fc = C.capOf(f), bc = C.capOf(front);
+  near(C.pieceDir(front, bc.cx, bc.cy)[2], 1, 1e-9);
+  for (const [dx, dy] of [[60, -40], [-100, 30], [20, 120]]) {
+    const a = C.pieceDir(f, fc.cx + dx, fc.cy + dy), b = C.pieceDir(front, bc.cx + dx, bc.cy + dy);
+    near(Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]), 0, 0.01, `前发画板和脸盖对齐 ${dx},${dy}`);
+  }
+  near((Math.acos(C.pieceDir(front, bc.cx + bc.rx, bc.cy)[2]) * 180) / Math.PI, C.BOARD_CAP, 1e-6);
+  const bb = back.box, mid = C.pieceDir(back, bb.x + bb.w / 2, bb.y + bb.h / 2);
+  assert.ok(mid[2] < -0.95, '正中是正后方');
+  assert.ok(C.pieceDir(back, bb.x + bb.w * 0.2, bb.y + bb.h / 2)[0] < -0.3 && C.pieceDir(back, bb.x + bb.w * 0.8, bb.y + bb.h / 2)[0] > 0.3);
+  assert.ok(C.pieceDir(back, bb.x + bb.w / 2, bb.y + 2)[1] > C.pieceDir(back, bb.x + bb.w / 2, bb.y + bb.h - 2)[1]);
+  assert.equal(C.pieceDir(top, top.box.x + 10, top.box.y + 10), null, '上面发片不贴在球面上');
+  const z = C.buildZone(d, back, 'hair', 12);
+  assert.equal(C.zoneAt(z, bb.x + 3, bb.y + 3), true); assert.equal(C.zoneAt(z, bb.x - 20, bb.y), false);
+  const mi = C.mirrorOf({ byId: { [back.id]: back } }, back.id, bb.x + 100, bb.y + 50);
+  assert.equal(mi.pieceId, back.id); near(mi.x, 2 * (bb.x + bb.w / 2) - (bb.x + 100), 1e-9);
 });

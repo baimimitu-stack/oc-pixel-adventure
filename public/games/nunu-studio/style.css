@@ -128,3 +128,5 @@ tr.pick:hover, tr.pick.on { background: #f1f4e8; }
   .project { display: none; }
   .two-col { grid-template-columns: 1fr; }
 }
+
+.group .lab { margin-right: 4px; font-size: 11px; color: var(--muted); display: inline; }

@@ -33,6 +33,13 @@ function create(canvas, opts = {}) {
     view.y = (H - e.h * z) / 2;
   }
   const setExtent = (w, h) => { extent = { w, h }; };
+  /** 让图纸上的一块矩形区域刚好装满画板 */
+  function fitRect(x, y, w, h) {
+    const z = Math.min((W - 24) / w, (H - 24) / h);
+    view.zoom = z;
+    view.x = (W - w * z) / 2 - x * z;
+    view.y = (H - h * z) / 2 - y * z;
+  }
   const setDoc = (d, refit) => { doc = d; if (refit) fit(); };
   const toSheet = (cx, cy) => { const r = canvas.getBoundingClientRect(); return { x: (cx - r.left - view.x) / view.zoom, y: (cy - r.top - view.y) / view.zoom }; };
   function zoomAt(f, cx, cy) {
@@ -173,6 +180,59 @@ function create(canvas, opts = {}) {
     ctx.restore();
   }
 
+  /** 发片画板：一块浅色画布（前发是圆盘），画在上面的发片会变成发片裁片，也会另起一层贴到 3D 脑袋上 */
+  function drawBoard(b, poly) {
+    const z = 1 / view.zoom, bx = b.box;
+    ctx.save();
+    if (poly) { path(poly); ctx.clip(); }
+    ctx.fillStyle = '#fbfaf3';
+    ctx.fillRect(bx.x, bx.y, bx.w, bx.h);
+    if (b.canvas) ctx.drawImage(b.canvas, bx.x, bx.y, bx.w, bx.h);
+    ctx.restore();
+    ctx.save();
+    ctx.setLineDash([6 * z, 4 * z]);
+    ctx.lineWidth = (b.selected ? 2.4 : 1.4) * z;
+    ctx.strokeStyle = b.selected ? '#e0a02f' : '#9fb28a';
+    if (poly) { path(poly); ctx.stroke(); } else ctx.strokeRect(bx.x, bx.y, bx.w, bx.h);
+    ctx.setLineDash([]);
+    ctx.font = `600 ${Math.max(9, Math.min(15, 12 * z * 1.1))}px system-ui, "PingFang SC", "Microsoft YaHei", sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = '#6b7a58';
+    ctx.fillText(`${b.name}（${b.hint}）`, bx.x, bx.y - 4 * z);
+    ctx.restore();
+  }
+
+  /** 画出来的发片裁片：排在图样右边的空白区，按它的颜色填，带虚线裁剪线 */
+  function drawExtra(d) {
+    const z = 1 / view.zoom, fs = Math.max(9, Math.min(14, 11 * z * 1.1));
+    ctx.save();
+    ctx.translate(d.dx, d.dy);
+    path(d.cut);
+    ctx.setLineDash([5 * z, 4 * z]);
+    ctx.lineWidth = 1 * z;
+    ctx.strokeStyle = '#b3aea0';
+    ctx.stroke();
+    ctx.setLineDash([]);
+    path(d.poly);
+    ctx.fillStyle = d.hex;
+    ctx.fill();
+    ctx.lineWidth = 1.5 * z;
+    ctx.strokeStyle = '#6f695e';
+    ctx.stroke();
+    ctx.font = `600 ${fs}px system-ui, "PingFang SC", "Microsoft YaHei", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 3 * z;
+    ctx.strokeStyle = 'rgba(255,255,255,.9)';
+    ctx.fillStyle = '#4a443a';
+    const cx = d.box.x + d.box.w / 2, cy = d.box.y + d.box.h / 2;
+    ctx.strokeText(d.label, cx, cy);
+    ctx.fillText(d.label, cx, cy);
+    ctx.restore();
+  }
+
   /** 发片画板：一块浅色画布，画在上面的发片会变成黏在头顶的发片裁片 */
   function drawBoard(b) {
     const z = 1 / view.zoom, bx = b.box;
@@ -208,7 +268,7 @@ function create(canvas, opts = {}) {
     ctx.fillRect(0, 0, e.w, e.h);
     ctx.shadowColor = 'transparent';
     doc.pieces.forEach((p) => drawPiece(env, p));
-    if (env.board) drawBoard(env.board);
+    for (const b of env.boards || []) drawBoard(b, b.poly);
     for (const d of env.extra || []) drawExtra(d);
     if (env.showSeams && doc.guides && doc.guides.notches) for (const n of doc.guides.notches) if (doc.byId[n.piece]) notch(n);
     // 校准尺：50 mm
@@ -228,7 +288,7 @@ function create(canvas, opts = {}) {
     ctx.restore();
   }
 
-  return { view, resize, fit, setDoc, setExtent, toSheet, zoomAt, pan, pieceAt, localOn, draw, get doc() { return doc; } };
+  return { view, resize, fit, fitRect, setDoc, setExtent, toSheet, zoomAt, pan, pieceAt, localOn, draw, get doc() { return doc; } };
 }
 
 root.NunuSheet = { create };

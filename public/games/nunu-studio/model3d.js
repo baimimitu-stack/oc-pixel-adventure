@@ -37,8 +37,8 @@ function pillowGeometry(piece, doc) {
   return g;
 }
 
-function patchGeometry(piece, n = 36) {
-  const THREE = T(), role = C.ROLES[piece.role], b = piece.box, pos = [], nor = [], uv = [], idx = [];
+function patchGeometry(piece, n = 36, over) {
+  const THREE = T(), role = over || C.ROLES[piece.role], b = piece.box, pos = [], nor = [], uv = [], idx = [];
   for (let i = 0; i <= n; i++) for (let j = 0; j <= n; j++) {
     const u = j / n, v = i / n, d = C.pieceDir(piece, b.x + u * b.w, b.y + v * b.h);
     pos.push(...C.targetPoint(role.target, d, role.off));
@@ -92,7 +92,7 @@ function create(canvas) {
   };
 
   /** 重建（图纸或用途变了）：comps[id] = { canvas, ... } 是每一片自己的画布 */
-  function build(newDoc, comps, skinHex) {
+  function build(newDoc, comps, skinHex, shells) {
     doc = newDoc;
     for (const m of bases) { group.remove(m); m.geometry.dispose(); }
     bases.length = 0;
@@ -114,6 +114,15 @@ function create(canvas) {
       mesh.userData.pieceId = p.id;
       group.add(mesh);
       patches.set(p.id, { mesh, tex, mat });
+    }
+    // 前发、后发：脑袋上另起的一层（比头皮布再凸出去一点），只有画了的地方看得见
+    for (const sh of shells || []) {
+      const tex = texOf(sh.canvas);
+      const mat = new THREE.MeshStandardMaterial({ map: tex, transparent: true, alphaTest: 0.3, roughness: 0.85, metalness: 0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -1 });
+      const mesh = new THREE.Mesh(patchGeometry(sh.piece, 40, { target: 'head', off: sh.off }), mat);
+      mesh.userData.pieceId = sh.piece.id;
+      group.add(mesh);
+      patches.set(sh.piece.id, { mesh, tex, mat });
     }
     view.target = C.TARGETS.head.pos[1] - 0.4;
   }
@@ -157,7 +166,7 @@ function create(canvas) {
   }
 
   /** 屏幕上的点打到哪：先找最近的、真的在裁片里面的点；打到娃娃本体（没有裁片盖着）返回 { base }；什么都没打到返回 null */
-  function pick(clientX, clientY) {
+  function pick(clientX, clientY, filter) {
     if (!doc) return null;
     const r = canvas.getBoundingClientRect();
     raycaster.setFromCamera(new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1), camera);
@@ -167,6 +176,7 @@ function create(canvas) {
       if (o.userData.base) return { base: o.userData.base };
       if (!h.uv) continue;
       const piece = doc.byId[o.userData.pieceId], b = piece.box;
+      if (filter && !filter(piece)) continue;
       const x = b.x + h.uv.x * b.w, y = b.y + h.uv.y * b.h;
       if (C.inPoly(piece.poly, x, y)) return { pieceId: piece.id, x, y };
     }
