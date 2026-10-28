@@ -394,6 +394,34 @@ function templateFromPieces(id, name, pieces, w, h) {
   return { id, name, w, h, axis, faceWidthPx: widest, imported: true, scaleLabel: '最大一片的宽度', pieces: list.map(({ id: pid, name: pn, role, poly }) => ({ id: pid, name: pn, role, poly })), pairs: findPairs(list, axis, w, h), guides: null };
 }
 
+/** 画布分辨率的位图（1 = 画了）→ 一块块的轮廓（图纸坐标）。box 是这张位图对应的图纸范围 */
+function maskToPolys(bm, box, opts = {}) {
+  const sx = box.w / bm.w, sy = box.h / bm.h;
+  const loops = Shape.outerContours(bm, { minArea: opts.minArea == null ? 60 : opts.minArea, eps: opts.eps == null ? 1.1 : opts.eps, smooth: opts.smooth == null ? 1 : opts.smooth });
+  return loops.map((l) => l.map(([x, y]) => [box.x + x * sx, box.y + y * sy]));
+}
+/** 一个多边形最粗的地方有多宽（里面能放下的最大圆的直径，图纸像素）：太细的发片剪不出来也缝不牢 */
+function polyThickness(poly) {
+  const { bm } = Shape.rasterizePolygon(poly, 1, 1), out = new Uint8Array(bm.w * bm.h);
+  for (let i = 0; i < out.length; i++) out[i] = bm.data[i] ? 0 : 1;
+  const d = Shape.distanceTo(out, bm.w, bm.h);
+  let m = 0;
+  for (let i = 0; i < d.length; i++) if (bm.data[i] && d[i] > m) m = d[i];
+  return m * 2;
+}
+/** 把一堆发片裁片一行一行排到图样右边的空白区（x0 起，宽 width）。items: [{id, box}] → { pos: {id:{dx,dy}}, w, h } */
+function packStrip(items, x0, y0, width, gap = 18) {
+  const list = items.slice().sort((a, b) => b.box.h - a.box.h), pos = {};
+  let x = x0, y = y0, rowH = 0, maxX = x0, maxY = y0;
+  for (const it of list) {
+    if (x > x0 && x + it.box.w > x0 + width) { x = x0; y += rowH + gap; rowH = 0; }
+    pos[it.id] = { dx: x - it.box.x, dy: y - it.box.y };
+    x += it.box.w + gap; rowH = Math.max(rowH, it.box.h);
+    maxX = Math.max(maxX, x - gap); maxY = Math.max(maxY, y + rowH);
+  }
+  return { pos, w: maxX, h: maxY };
+}
+
 /* ============ 备料单、检查 ============ */
 const FABRIC_WIDTH_CM = 110;
 const mmPerPx = (doc, faceMm) => faceMm / doc.faceWidthPx;
@@ -412,28 +440,27 @@ function bom(doc, stats, opts) {
     let fabric, hex;
     if (p.material === 'skin') { skinArea += cm2; skinN++; fabric = '肤色布'; hex = skinHex; }
     else {
-      const colors = st.colors && st.colors.length ? st.colors : [{ hex: '#ece7dc', frac: 1, none: true }];
-      for (const c of colors) {
-        const e = hairBy.get(c.hex) || { hex: c.hex, area: 0, pieces: new Set(), none: !!c.none };
-        e.area += cm2 * c.frac; e.pieces.add(p.label);
-        hairBy.set(c.hex, e);
-      }
-      fabric = '发片布'; hex = colors[0].hex;
-    }
-    // 脸片额头上的前发：做成贴布，面积就是画出来的面积，颜色按画的算
-    if (p.material === 'skin' && st.hairAreaPx > 0 && st.colors && st.colors.length) {
-      for (const c of st.colors) {
-        const e = hairBy.get(c.hex) || { hex: c.hex, area: 0, pieces: new Set() };
-        e.area += px2cm2(st.hairAreaPx, mm) * c.frac; e.pieces.add(p.label + ' 前发');
-        hairBy.set(c.hex, e);
-      }
+      // 发片布：整片涂满时，颜色就是主色；涂得不满或没涂，先不算颜色（检查里会提醒）。涂在上面的别的颜色是单独的发片，见下面 derived
+      const base = st.coverage >= 0.9 && st.colors && st.colors[0] ? st.colors[0] : { hex: '#ece7dc', none: true };
+      const e = hairBy.get(base.hex) || { hex: base.hex, area: 0, pieces: new Set(), none: !!base.none };
+      e.area += cm2; e.pieces.add(p.label);
+      hairBy.set(base.hex, e);
+      fabric = '发片布'; hex = base.hex;
     }
     rows.push({ id: p.id, label: p.label, name: p.name, role: p.role, material: p.material, fabric, hex, w: p.box.w * mm, h: p.box.h * mm, cm2 });
+  }
+  // 画出来的发片（前发贴布、后发上的一缕一缕）：每一块是一片裁片，按颜色算布
+  for (const d of opts.derived || []) {
+    const cm2 = px2cm2(d.cutAreaPx, mm);
+    const e = hairBy.get(d.hex) || { hex: d.hex, area: 0, pieces: new Set() };
+    e.area += cm2; e.pieces.add(d.label);
+    hairBy.set(d.hex, e);
+    rows.push({ id: d.id, label: d.label, name: d.name, role: 'derived', material: 'hair', fabric: '发片布', hex: d.hex, w: d.cutBox.w * mm, h: d.cutBox.h * mm, cm2, derived: true });
   }
   const fabrics = [];
   if (skinN) fabrics.push({ label: '肤色布', hex: skinHex, pieces: skinN, areaCm2: skinArea, buyCm: roundUp5((skinArea * 1.3) / FABRIC_WIDTH_CM) });
   for (const e of hairBy.values()) if (!e.none) fabrics.push({ label: '发片布', hex: e.hex, pieces: e.pieces.size, areaCm2: e.area, buyCm: roundUp5((e.area * 1.3) / FABRIC_WIDTH_CM) });
-  return { fabrics, rows, pieceCount: doc.pieces.length, mmPerPx: mm };
+  return { fabrics, rows, pieceCount: doc.pieces.length + (opts.derived || []).length, mmPerPx: mm };
 }
 
 function colorDist(a, b) {
@@ -456,7 +483,7 @@ function checks(doc, stats, ctx = {}) {
   for (const p of doc.pieces.filter((q) => q.material === 'hair')) {
     const st = stats[p.id] || {}, cov = st.coverage || 0;
     if (cov < 0.05) { bad = true; add('error', `${p.label} ${p.name}还没上色：发片布的颜色就是你涂的颜色，没涂就不知道该备什么布。`); continue; }
-    if (cov < 0.9) add('warn', `${p.label} ${p.name}只涂了 ${Math.round(cov * 100)}%，没涂的地方会露出底布。涂满，或者确认那里要留白。`);
+    if (cov < 0.9) add('warn', `${p.label} ${p.name}只涂了 ${Math.round(cov * 100)}%，没涂的地方会露出底布。先用大笔刷把底色涂满，再在上面画别的颜色的发片。`);
     const n = (st.colors || []).length;
     if (n > 2) add('warn', `${p.label} ${p.name}用了 ${n} 种颜色：每一种都要单独裁一小块布再拼，缝起来会很碎。`);
   }
@@ -474,6 +501,10 @@ function checks(doc, stats, ctx = {}) {
     if (!(st.faceInk > 0)) add('warn', '脸还空着：在脸片的脸窗里画上眼睛和嘴。');
     else if ((st.faceOutside || 0) > 0.5) add('warn', `脸上有 ${Math.round(st.faceOutside * 100)}% 的笔画落在眼睛、嘴的参考框外面。位置偏了的话，缝出来脸会歪。`);
   }
+  for (const d of ctx.derived || []) {
+    if (d.thicknessMm < 4) add('warn', `${d.label}（${d.name}）最粗的地方只有 ${d.thicknessMm.toFixed(1)} mm，太细了，剪不出来也缝不牢。画粗一点，或者和旁边的合成一片。`);
+    else if (d.areaMm2 < 40) add('warn', `${d.label}（${d.name}）只有 ${d.areaMm2.toFixed(0)} mm²，太小了，剪不出来。`);
+  }
   const noRole = doc.pieces.filter((p) => p.role === 'none');
   if (noRole.length) add('warn', `${noRole.length} 片没有放到 3D 上（${noRole.slice(0, 4).map((p) => p.name).join('、')}${noRole.length > 4 ? '…' : ''}），在 3D 上看不到它们。去「图纸」页签给它们选个用途。`);
   const seen = new Map();
@@ -489,7 +520,7 @@ const api = {
   TAU, ROLES, ROLE_KEYS, TARGETS, PILLOWS, PILLOW_ROUND, unitPerPx, LAYERS, LAYER_NAMES, FABRIC_WIDTH_CM,
   inPoly, boxOfPoly, areaOfPoly, smoothPoly, makeDoc, labelOf, mirrorOf,
   pieceDir, capOf, dirOf, targetPoint, targetNormal, pillowMesh,
-  layerRule, buildZone, zoneAt, zoneLoops, segmentPieces, findPairs, templateFromPieces,
+  layerRule, buildZone, zoneAt, zoneLoops, segmentPieces, findPairs, templateFromPieces, maskToPolys, polyThickness, packStrip,
   mmPerPx, px2cm2, bom, checks, colorDist,
 };
 root.NunuCore = api;

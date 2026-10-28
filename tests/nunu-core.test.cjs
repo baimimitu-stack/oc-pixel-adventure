@@ -303,10 +303,47 @@ test('前发：脸片额头（脸窗以外）能画发片，脸窗里不能，�
   for (const p of d.pieces.filter((q) => q.material === 'hair')) stats[p.id] = { coverage: 1, colors: [{ hex: '#7d594a', frac: 1 }] };
   stats.face = { faceInk: 300, faceOutside: 0, hairInk: 4000, hairAreaPx: 6000, coverage: 0.2, colors: [{ hex: '#2a2a3a', frac: 1 }] };
   const b = C.bom(d, stats, { faceMm: 100, skin: '#f1dfcd' });
-  const front = b.fabrics.find((x) => x.hex === '#2a2a3a');
-  assert.ok(front && front.areaCm2 > 5, JSON.stringify(b.fabrics));
+  assert.ok(!b.fabrics.some((x) => x.hex === '#2a2a3a'), '没有派生发片时，脸片上的发片色不单独算布');
   assert.equal(C.checks(d, stats, {}).filter((x) => x.level === 'error').length, 0);
   const many = C.checks(d, { ...stats, face: { ...stats.face, colors: [{ hex: '#111111', frac: 0.4 }, { hex: '#222222', frac: 0.3 }, { hex: '#333333', frac: 0.3 }] } }, {});
   assert.ok(many.some((x) => x.level === 'warn' && /前发/.test(x.text)));
   assert.ok(C.checks(d, { ...stats, bodyA: { hairInk: 20 } }, {}).some((x) => x.level === 'error' && /备料错误/.test(x.text)));
+});
+
+test('画出来的发片：位图 → 一块块轮廓（图纸坐标）；太细的、太小的会被检查标出来；排到图样右边', () => {
+  // 一块 40×20 的长条和一块 10×10 的小方块，画布是图纸的 2 倍分辨率
+  const bm = { w: 200, h: 100, data: new Uint8Array(200 * 100) };
+  const fill = (x0, y0, x1, y1) => { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) bm.data[y * 200 + x] = 1; };
+  fill(20, 20, 100, 60); fill(140, 70, 160, 90);
+  const box = { x: 500, y: 100, w: 100, h: 50 };
+  const polys = C.maskToPolys(bm, box, { minArea: 30 });
+  assert.equal(polys.length, 2);
+  const big = polys.map((p) => ({ p, a: C.areaOfPoly(p) })).sort((a, b) => b.a - a.a);
+  near(big[0].a, 40 * 20, 120, '长条面积（图纸像素²，圆角会让面积略小）');
+  near(C.boxOfPoly(big[0].p).x, 510, 2); near(C.boxOfPoly(big[0].p).y, 110, 2);
+  assert.ok(C.polyThickness(big[0].p) > 18 && C.polyThickness(big[0].p) < 22, '长条最粗 20');
+  assert.ok(C.polyThickness(big[1].p) > 8 && C.polyThickness(big[1].p) < 12);
+  // 排版：一行放不下就换行；位置是把外接框左上角放到格子里
+  const items = [{ id: 'a', box: { x: 10, y: 10, w: 200, h: 80 } }, { id: 'b', box: { x: 0, y: 0, w: 200, h: 60 } }, { id: 'c', box: { x: 5, y: 5, w: 100, h: 40 } }];
+  const pk = C.packStrip(items, 1200, 24, 450, 18);
+  assert.equal(pk.pos.a.dx + 10, 1200); assert.equal(pk.pos.a.dy + 10, 24);
+  assert.ok(pk.pos.b.dx + 0 >= 1200 + 200, 'b 和 a 同一行'); assert.equal(pk.pos.b.dy + 0, 24);
+  assert.ok(pk.pos.c.dy + 5 > 24 + 80, 'c 放不下，换到下一行');
+  assert.ok(pk.w > 1400 && pk.h > 24 + 80);
+  // 备料：画出来的发片按颜色算布（含缝份的面积）；检查：太细、太小要警告
+  const d = doc(), stats = {};
+  for (const p of d.pieces.filter((q) => q.material === 'hair')) stats[p.id] = { coverage: 1, colors: [{ hex: '#7d594a', frac: 1 }] };
+  stats.face = { faceInk: 300, faceOutside: 0 };
+  const derived = [
+    { id: 'face.hair.0', label: '发1', name: '前发 1', hex: '#2a2a3a', cutAreaPx: 6000, cutBox: { w: 120, h: 70 } },
+    { id: 'big.hair.1', label: '发2', name: '头顶发发片 1', hex: '#c9a35c', cutAreaPx: 3000, cutBox: { w: 80, h: 60 } },
+  ];
+  const bom = C.bom(d, stats, { faceMm: 100, skin: '#f1dfcd', derived });
+  assert.ok(bom.fabrics.find((f) => f.hex === '#2a2a3a').areaCm2 > 5 && bom.fabrics.find((f) => f.hex === '#c9a35c'));
+  assert.equal(bom.pieceCount, 17);
+  assert.ok(bom.rows.filter((r) => r.derived).length === 2);
+  const warn = C.checks(d, stats, { derived: [{ label: '发3', name: '细条', thicknessMm: 2.5, areaMm2: 500 }, { label: '发4', name: '小点', thicknessMm: 6, areaMm2: 20 }, { label: '发5', name: '正常', thicknessMm: 9, areaMm2: 400 }] });
+  assert.ok(warn.some((x) => x.level === 'warn' && /发3/.test(x.text) && /太细/.test(x.text)));
+  assert.ok(warn.some((x) => x.level === 'warn' && /发4/.test(x.text) && /太小/.test(x.text)));
+  assert.ok(!warn.some((x) => /发5/.test(x.text)));
 });

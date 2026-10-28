@@ -101,7 +101,7 @@ function updateHint() {
   h.textContent = {
     face: `脸：只能画在脸片的脸窗里（蓝色虚线框住的那块）${g}。额头、边上点了也画不上。`,
     skin: `彩绘：腮红、花纹，画在肤色布的裁片上${g}。发片布不画彩绘。`,
-    hair: '发片：后发（头顶发、后脑）是缝上去的，整片涂满，涂的颜色就是这块发片布的颜色；前发直接画在脸片的额头那一块（蓝色弧线以上），做成贴布贴上去。别的肤色布上画不了发片。',
+    hair: '画发片的方法：① 后发（头顶发、后脑）先用大笔刷把底色涂满；② 前发画在脸片额头那一块（蓝色弧线以上）；③ 想要一缕一缕的，就在上面用别的颜色画出形状；④ 每一块颜色会自动变成一片发片裁片，出现在图样右边的空白处，带缝份，备料里按颜色算布。画错了用橡皮擦。',
   }[ui.layer] + info;
 }
 
@@ -328,7 +328,7 @@ function scanLayer(p, layer) {
       buckets.set(k, b);
     }
   }
-  return { ink: ink * 4, outsideFrac: ink ? outside / ink : 0, buckets, sampled: ink, total: mask.n, areaPx: (ink * 4) / (sx * sy) };
+  return { ink: ink * 4, outsideFrac: ink ? outside / ink : 0, buckets, sampled: ink, total: mask.n, areaPx: (ink * 4) / (sx * sy), data, cv, mask };
 }
 function dominantColors(buckets, sampled) {
   const list = [...buckets.values()].map((b) => ({ n: b.n, hex: hexOf(b.r / b.n, b.g / b.n, b.b / b.n) })).sort((a, b) => b.n - a.n);
@@ -344,8 +344,36 @@ function dominantColors(buckets, sampled) {
     return { hex: pal ? pal.toLowerCase() : m.hex, frac: m.n / tot };
   });
 }
+/** 画在发片层上的颜色 → 一块块发片裁片。整片涂满的发片布，主色就是布色，只有别的颜色才是贴上去 / 缝上去的发片；脸片额头上的前发每种颜色都是一块贴布 */
+function deriveHair(p, hair, st) {
+  const cols = st.colors || [];
+  if (!cols.length) return [];
+  const full = p.material === 'hair' && st.coverage >= 0.9;
+  if (full && cols.length === 1) return [];
+  const want = cols.filter((c, i) => !(full && i === 0));
+  if (!want.length) return [];
+  const { data, cv, mask } = hair, rgbs = cols.map((c) => rgbOf(c.hex)), masks = new Map(want.map((c) => [c, Shape.emptyBitmap(cv.width, cv.height)]));
+  for (let i = 0; i < mask.m.length; i++) {
+    if (!mask.m[i] || data[i * 4 + 3] < 128) continue;
+    let best = 0, bd = Infinity;
+    for (let k = 0; k < rgbs.length; k++) { const dd = (rgbs[k][0] - data[i * 4]) ** 2 + (rgbs[k][1] - data[i * 4 + 1]) ** 2 + (rgbs[k][2] - data[i * 4 + 2]) ** 2; if (dd < bd) { bd = dd; best = k; } }
+    const m = masks.get(cols[best]);
+    if (m) m.data[i] = 1;
+  }
+  const out = [];
+  for (const c of want) for (const poly of C.maskToPolys(masks.get(c), p.box, { minArea: 80 })) out.push({ from: p.id, hex: c.hex, poly });
+  return out;
+}
+const cutMemo = new Map();
+function cutOfPoly(poly, d) {
+  if (d < 0.5) return poly;
+  const key = `${poly.length}|${poly[0][0].toFixed(1)},${poly[0][1].toFixed(1)}|${C.areaOfPoly(poly).toFixed(0)}|${d.toFixed(2)}`;
+  if (!cutMemo.has(key)) { if (cutMemo.size > 200) cutMemo.clear(); cutMemo.set(key, Shape.offsetPolygon(poly, d, 2)); }
+  return cutMemo.get(key);
+}
+let derived = [], ext = { w: 0, h: 0 };
 function computeStats() {
-  const out = {};
+  const out = {}, found = [];
   for (const p of doc.pieces) {
     const st = {};
     const face = scanLayer(p, 'face'), skin = scanLayer(p, 'skin'), hair = scanLayer(p, 'hair');
@@ -356,10 +384,24 @@ function computeStats() {
       st.hairAreaPx = hair.areaPx;
       st.coverage = Math.min(1, (hair.sampled * 4) / Math.max(1, hair.total));
       st.colors = dominantColors(hair.buckets, hair.sampled);
+      for (const d of deriveHair(p, hair, st)) found.push({ ...d, piece: p });
     } else { st.coverage = 0; st.colors = []; }
     out[p.id] = st;
   }
   stats = out;
+  // 画出来的发片：量大小、放缝份、排到图样右边的空白区
+  const k = mm(), seamPx = state.seamMm / k, counter = {};
+  derived = found.map((d, i) => {
+    const n = (counter[d.from] = (counter[d.from] || 0) + 1), cut = cutOfPoly(d.poly, seamPx), area = C.areaOfPoly(d.poly);
+    const name = d.piece.role === 'face' ? `前发 ${n}` : `${d.piece.name}发片 ${n}`;
+    return { id: `${d.from}.hair.${i}`, from: d.from, label: `发${i + 1}`, name, hex: d.hex, poly: d.poly, cut: cut, areaPx: area, areaMm2: area * k * k, thicknessMm: C.polyThickness(d.poly) * k, cutAreaPx: C.areaOfPoly(cut), box: C.boxOfPoly(d.poly), cutBox: C.boxOfPoly(cut), dx: 0, dy: 0 };
+  });
+  const pack = C.packStrip(derived.map((d) => ({ id: d.id, box: d.cutBox })), doc.w + 30, 24, 520);
+  for (const d of derived) Object.assign(d, pack.pos[d.id]);
+  const next = derived.length ? { w: Math.max(doc.w, pack.w + 30), h: Math.max(doc.h, pack.h + 24) } : { w: doc.w, h: doc.h };
+  const changed = next.w !== ext.w || next.h !== ext.h;
+  ext = next;
+  if (sheet) { sheet.setExtent(ext.w, ext.h); if (changed) sheet.fit(); markSheet(); }
   computeReport();
 }
 function scheduleStats() { clearTimeout(statsTimer); statsTimer = setTimeout(computeStats, 260); }
@@ -367,8 +409,8 @@ function guardOffCount() { return td().strokes.filter((s) => s.x && !s.e).length
 function computeReport() {
   const cutAreas = {};
   for (const p of doc.pieces) cutAreas[p.id] = C.areaOfPoly(cutPoly(p));
-  const bom = C.bom(doc, stats, { faceMm: state.faceMm, skin: state.skin, cutAreas });
-  const list = C.checks(doc, stats, { faceMm: state.faceMm, guardOff: guardOffCount() });
+  const bom = C.bom(doc, stats, { faceMm: state.faceMm, skin: state.skin, cutAreas, derived });
+  const list = C.checks(doc, stats, { faceMm: state.faceMm, guardOff: guardOffCount(), derived });
   report = { bom, checks: list, errors: list.filter((c) => c.level === 'error').length, warns: list.filter((c) => c.level === 'warn').length };
   const b = $('#checkBadge');
   b.textContent = report.errors ? String(report.errors) : report.warns ? String(report.warns) : '';
@@ -393,7 +435,7 @@ function frame() {
   if (dirty.scene && model) { model.render(); dirty.scene = false; }
 }
 function sheetEnv(clean) {
-  return { comps: Object.fromEntries(doc.pieces.map((p) => [p.id, { canvas: rt[p.id].comp }])), cutPolys: cutMap(), showCut: true, showSeams: ui.seams, mm: mm(), selectedId: clean ? '' : ui.selected, hoverId: clean ? '' : ui.hover };
+  return { comps: Object.fromEntries(doc.pieces.map((p) => [p.id, { canvas: rt[p.id].comp }])), cutPolys: cutMap(), showCut: true, showSeams: ui.seams, mm: mm(), selectedId: clean ? '' : ui.selected, hoverId: clean ? '' : ui.hover, extra: derived };
 }
 
 /* ============ 图样交互 ============ */
@@ -565,7 +607,7 @@ function download(name, blob) {
 const safeName = () => (state.name || '努努').replace(/[\\/:*?"<>|]/g, '');
 const fmtPath = (poly, k) => 'M' + poly.map(([x, y]) => `${(x * k).toFixed(2)} ${(y * k).toFixed(2)}`).join('L') + 'Z';
 function exportSvg() {
-  const k = mm(), W = doc.w * k, H = doc.h * k + 14;
+  const k = mm(), W = (ext.w || doc.w) * k, H = (ext.h || doc.h) * k + 14;
   let body = '';
   for (const p of doc.pieces) {
     const st = stats[p.id] || {}, fill = p.material === 'hair' && st.colors && st.colors[0] ? st.colors[0].hex : 'none';
@@ -573,6 +615,11 @@ function exportSvg() {
     body += `<path d="${fmtPath(cutPoly(p), k)}" fill="none" stroke="#9a9588" stroke-width=".35" stroke-dasharray="3 2"/>`;
     body += `<path d="${fmtPath(p.poly, k)}" fill="${fill}" fill-opacity=".28" stroke="#3f3a33" stroke-width=".5"/>`;
     body += `<text x="${((p.box.x + p.box.w / 2) * k).toFixed(2)}" y="${((p.box.y + p.box.h / 2) * k).toFixed(2)}" font-size="4.2" text-anchor="middle" fill="#5a5448" font-family="sans-serif">${esc(p.label + ' ' + p.name)}</text></g>`;
+  }
+  for (const d of derived) {
+    const shift = (poly) => poly.map(([x, y]) => [x + d.dx, y + d.dy]);
+    body += `<g><title>${esc(d.label + ' ' + d.name)}</title><path d="${fmtPath(shift(d.cut), k)}" fill="none" stroke="#9a9588" stroke-width=".35" stroke-dasharray="3 2"/><path d="${fmtPath(shift(d.poly), k)}" fill="${d.hex}" fill-opacity=".55" stroke="#3f3a33" stroke-width=".5"/>`;
+    body += `<text x="${((d.box.x + d.box.w / 2 + d.dx) * k).toFixed(2)}" y="${((d.box.y + d.box.h / 2 + d.dy) * k).toFixed(2)}" font-size="3.6" text-anchor="middle" fill="#2f2b25" font-family="sans-serif">${esc(d.label)}</text></g>`;
   }
   if (doc.guides) {
     for (const q of [doc.guides.lens, doc.guides.eyeL, doc.guides.eyeR, doc.guides.mouth]) body += `<path d="${fmtPath(q, k)}" fill="none" stroke="#4678aa" stroke-width=".3" stroke-dasharray="2 1.5"/>`;
@@ -594,9 +641,10 @@ function withCleanView(fn) {
 function exportPng() {
   const s = 3, off = document.createElement('canvas');
   withCleanView(() => {
-    const inst = window.NunuSheet.create(off, { fixed: { w: doc.w * s, h: doc.h * s } });
+    const inst = window.NunuSheet.create(off, { fixed: { w: (ext.w || doc.w) * s, h: (ext.h || doc.h) * s } });
     inst.resize();
     inst.setDoc(doc, false);
+    inst.setExtent(ext.w || doc.w, ext.h || doc.h);
     inst.view.zoom = s; inst.view.x = 0; inst.view.y = 0;
     inst.draw(sheetEnv(true));
   });
@@ -607,7 +655,7 @@ function bomText() {
   const out = [`努努赛博定制台 · 备料单`, `作品：${state.name}　图纸：${doc.name}　${doc.scaleLabel} ${state.faceMm} mm　缝份 ${state.seamMm} mm　${new Date().toISOString().slice(0, 10)}`, '', '== 面料 =='];
   for (const f of b.fabrics) out.push(`${f.label} ${f.hex}：${f.pieces} 片，面积 ${f.areaCm2.toFixed(0)} cm²，建议买 ${f.buyCm} cm（幅宽 ${C.FABRIC_WIDTH_CM} cm，含 30% 损耗）`);
   out.push('', '== 裁片（按编号裁，裁完打钩）==');
-  for (const r of b.rows) out.push(`${td().cut[r.id] ? '[x]' : '[ ]'} ${r.label} ${r.name}　${r.w.toFixed(0)}×${r.h.toFixed(0)} mm　${r.fabric} ${r.hex}　用途：${C.ROLES[r.role].label}`);
+  for (const r of b.rows) out.push(`${td().cut[r.id] ? '[x]' : '[ ]'} ${r.label} ${r.name}　${r.w.toFixed(0)}×${r.h.toFixed(0)} mm　${r.fabric} ${r.hex}　用途：${r.derived ? '画出来的发片（贴 / 缝上去）' : C.ROLES[r.role].label}`);
   out.push('', '== 检查 ==');
   for (const c of report.checks) out.push(`${c.level === 'ok' ? '✓' : c.level === 'warn' ? '⚠' : '✗'} ${c.text}`);
   out.push('', '图纸是网上流传的公开图纸，每一片的用途是按形状猜的；缝出来的布会有形变。先用便宜布试缝一遍，再裁正式布料。');
