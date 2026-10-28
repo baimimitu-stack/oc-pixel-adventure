@@ -140,6 +140,17 @@ function create(canvas, opts = {}) {
       ctx.stroke();
       ctx.setLineDash([]);
     }
+    for (const dt of p.darts || []) {
+      ctx.save();
+      ctx.lineWidth = 2.6 * z;
+      ctx.strokeStyle = '#e0822b';
+      for (const side of [dt.left, dt.right]) { ctx.beginPath(); side.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); }
+      ctx.font = `600 ${Math.max(9, Math.min(13, 10 * z * 1.1))}px system-ui, "PingFang SC", "Microsoft YaHei", sans-serif`;
+      ctx.fillStyle = '#c4681a';
+      ctx.textAlign = 'center';
+      ctx.fillText('省道', (dt.left[0][0] + dt.right[0][0]) / 2, dt.left[0][1] - 4 * z);
+      ctx.restore();
+    }
     label(p, env);
     if (p.id === env.selectedId || p.id === env.hoverId) {
       path(p.poly);

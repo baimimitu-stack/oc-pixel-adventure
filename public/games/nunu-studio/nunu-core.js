@@ -90,10 +90,10 @@ function makeDoc(tpl, opts = {}) {
     const role = ROLE_KEYS.includes(roles[p.id]) ? roles[p.id] : p.role || 'none';
     const material = materials[p.id] === 'hair' || materials[p.id] === 'skin' ? materials[p.id] : ROLES[role].material;
     const box = boxOfPoly(poly);
-    return { id: p.id, index: i, label: labelOf(i), name: p.name, role, material, poly, box, area: areaOfPoly(poly), partner: (tpl.pairs || {})[p.id] || null, axis: box.x + box.w / 2, pxPerDeg: tpl.faceWidthPx / 2 / ROLES.face.alpha, faceWidthPx: tpl.faceWidthPx, edges: edgesOf(poly, box), rows: rowsOf(poly, box), place: p.place || null, anchorPx: p.anchorPx || null, heightPoly: p.heightPoly || null, thick: p.thick || 0 };
+    return { id: p.id, index: i, label: labelOf(i), name: p.name, role, material, poly, box, area: areaOfPoly(poly), partner: (tpl.pairs || {})[p.id] || null, axis: box.x + box.w / 2, pxPerDeg: tpl.faceWidthPx / 2 / ROLES.face.alpha, faceWidthPx: tpl.faceWidthPx, edges: edgesOf(poly, box), rows: rowsOf(poly, box), darts: [], place: p.place || null, anchorPx: p.anchorPx || null, heightPoly: p.heightPoly || null, thick: p.thick || 0 };
   });
   const head = headModel(pieces);
-  for (const p of pieces) p.head = head;
+  for (const p of pieces) { p.head = head; p.darts = ROLES[p.role] && ROLES[p.role].kind === 'leaf' ? dartsOf(p.rows) : []; }
   return { id: tpl.id, name: tpl.name, w: tpl.w, h: tpl.h, axis: tpl.axis, faceWidthPx: tpl.faceWidthPx, scaleLabel: tpl.scaleLabel || '脸片宽度', imported: !!tpl.imported, flat: !!tpl.flat, seams: tpl.seams || null, pieces, head, guides: tpl.guides || null, byId: Object.fromEntries(pieces.map((p) => [p.id, p])) };
 }
 function labelOf(i) { return i < 20 ? String.fromCharCode(0x2460 + i) : `(${i + 1})`; }
@@ -101,16 +101,42 @@ function labelOf(i) { return i < 20 ? String.fromCharCode(0x2460 + i) : `(${i + 
 
 /** 每一行（图纸的每个 y）上，片最左和最右在哪（后脑叶子用：从红边到黄边的位置按这一行的宽度算） */
 function rowsOf(poly, box, n = 96) {
-  const l = [], r = [];
+  const l = [], r = [], iv = [], ys = [];
   for (let i = 0; i <= n; i++) {
     const y = box.y + (box.h * Math.min(i, n - 0.001)) / n, xs = [];
     for (let k = 0; k < poly.length; k++) {
       const [x0, y0] = poly[k], [x1, y1] = poly[(k + 1) % poly.length];
       if ((y0 <= y && y1 > y) || (y1 <= y && y0 > y)) xs.push(x0 + ((y - y0) / (y1 - y0)) * (x1 - x0));
     }
-    l.push(xs.length ? Math.min(...xs) : box.x); r.push(xs.length ? Math.max(...xs) : box.x + box.w);
+    xs.sort((p, q) => p - q);
+    const ivs = [];
+    for (let k = 0; k + 1 < xs.length; k += 2) ivs.push([xs[k], xs[k + 1]]);
+    iv.push(ivs); ys.push(y);
+    l.push(xs.length ? xs[0] : box.x); r.push(xs.length ? xs[xs.length - 1] : box.x + box.w);
   }
-  return { l, r };
+  return { l, r, iv, ys };
+}
+/** 这一片的省道（V 形缺口）：连续几行里，片被一道缺口分成两段，缺口两边的边就是要缝在一起的两条边 */
+function dartsOf(rows) {
+  const out = [];
+  let cur = null;
+  rows.iv.forEach((ivs, i) => {
+    if (ivs.length >= 2) {
+      cur = cur || { left: [], right: [] };
+      cur.left.push([ivs[0][1], rows.ys[i]]); cur.right.push([ivs[1][0], rows.ys[i]]);
+    } else if (cur) { out.push(cur); cur = null; }
+  });
+  if (cur) out.push(cur);
+  const len = (pl) => pl.reduce((n, q, i) => (i ? n + Math.hypot(q[0] - pl[i - 1][0], q[1] - pl[i - 1][1]) : 0), 0);
+  return out.filter((d) => d.left.length >= 3).map((d) => ({ ...d, lenL: len(d.left), lenR: len(d.right) }));
+}
+/** 在第 v 行（0..1）上，x 位置是「这一行在片里面的部分」的第几成：省道缺口不算宽度（缝上以后缺口就合上了） */
+function rowFrac(piece, v, x) {
+  const rows = piece.rows, i = Math.max(0, Math.min(rows.iv.length - 1, Math.round(clamp01(v) * (rows.iv.length - 1)))), ivs = rows.iv[i];
+  let total = 0, before = 0;
+  for (const [a, b] of ivs) { total += b - a; before += Math.max(0, Math.min(x, b) - a); }
+  if (total <= 1e-6) { const l = rows.l[i], r = rows.r[i]; return clamp01((x - l) / Math.max(1e-6, r - l)); }
+  return clamp01(before / total);
 }
 
 /** 头：脸盖（离正前方 64° 以内）+ 围脸的两圈（头顶发在上半圈、下巴在下半圈，厚度来自各自的图纸）+ 剩下的背面是两片后脑。
@@ -139,7 +165,7 @@ function headModel(pieces) {
   const open = phiEdge.map((e, i) => (e < 179.5 ? i : -1)).filter((i) => i >= 0);
   // 脖子洞：后脑叶子的下边（绿边）加上下巴的凸起，围成一圈接身体；洞的半径（离下极点多少度）由这一圈的周长定
   const leaves = pieces.filter((p) => ROLES[p.role] && ROLES[p.role].kind === 'leaf');
-  const bottomW = leaves.reduce((n, p) => n + (p.rows.r[92] - p.rows.l[92]), 0);
+  const bottomW = leaves.reduce((n, p) => n + p.rows.iv[92].reduce((m, [a, b]) => m + b - a, 0), 0);
   const pxPerDeg = (hairTop || chin || leaves[0] || { pxPerDeg: 2.5 }).pxPerDeg;
   const neck = leaves.length ? (bottomW * 1.45) / (2 * Math.PI) / pxPerDeg : 18;
   const thetaTop = open.length ? open[0] : 15, thetaBottom = Math.min(open.length ? open[open.length - 1] : 165, 180 - neck);
@@ -209,8 +235,7 @@ function pieceDir(piece, x, y) {
   if (role.kind === 'leaf') {
     // 后脑的一片：从上到下是纬度，从红边（缝在围脸那一圈的外边上）到黄边（缝另一片后脑，正后方）是经度
     const h = piece.head, th = h.thetaTop + (h.thetaBottom - h.thetaTop) * v;
-    const l = lerpAt(piece.rows.l, v), r = lerpAt(piece.rows.r, v), w = Math.max(1e-6, r - l);
-    const t = clamp01((x - l) / w), edge = lerpAt(h.phiEdge, th / 180);
+    const t = rowFrac(piece, v, x), edge = lerpAt(h.phiEdge, th / 180);
     const phi = role.sign < 0 ? -(edge + (180 - edge) * t) : 180 - (180 - edge) * t;
     return dirOf(phi, th);
   }
@@ -584,6 +609,11 @@ function checks(doc, stats, ctx = {}) {
   const seen = new Map();
   for (const p of doc.pieces) if (p.role !== 'none' && ROLES[p.role].target) seen.set(p.role, [...(seen.get(p.role) || []), p.name]);
   for (const [role, names] of seen) if (names.length > 1) add('warn', `「${ROLES[role].label}」这个位置上同时放了 ${names.join('、')}，3D 上会叠在一起。`);
+  for (const p of doc.pieces) for (const dt of p.darts || []) {
+    const mmk = mmPerPx(doc, ctx.faceMm || 100), a = dt.lenL * mmk, b = dt.lenR * mmk;
+    if (Math.abs(a - b) / Math.max(a, b) > 0.12) add('warn', `${p.label} ${p.name}的省道两边长度差了 ${(Math.abs(a - b) / Math.max(a, b) * 100).toFixed(0)}%（${a.toFixed(0)} / ${b.toFixed(0)} mm），缝合时会皱。`);
+    else add('ok', `${p.label} ${p.name}有一个省道：缺口两边各 ${((a + b) / 2).toFixed(0)} mm，缝在一起；3D 里已经按缝合以后的样子算。`);
+  }
   for (const sm of ctx.seams || []) {
     const mmk = mmPerPx(doc, ctx.faceMm || 100), a = sm.a * mmk, b = sm.b * mmk;
     if (Math.abs(a - b) / Math.max(a, b) > 0.03) add('warn', `缝合长度对不上：${sm.name}，一边 ${a.toFixed(0)} mm，另一边 ${b.toFixed(0)} mm（差 ${(Math.abs(a - b) / Math.max(a, b) * 100).toFixed(0)}%）。`);
@@ -598,7 +628,7 @@ const api = {
   TAU, ROLES, ROLE_KEYS, isFace, TARGETS, PILLOWS, PILLOW_ROUND, unitPerPx, LAYERS, LAYER_NAMES, FABRIC_WIDTH_CM,
   inPoly, boxOfPoly, areaOfPoly, smoothPoly, makeDoc, labelOf, mirrorOf,
   pieceDir, capOf, dirOf, targetPoint, targetNormal, pillowMesh,
-  layerRule, buildZone, zoneAt, zoneLoops, segmentPieces, findPairs, templateFromPieces, maskToPolys, polyThickness, packStrip, makeBoards, capDir, backDir, BOARD_CAP,
+  dartsOf, rowFrac, layerRule, buildZone, zoneAt, zoneLoops, segmentPieces, findPairs, templateFromPieces, maskToPolys, polyThickness, packStrip, makeBoards, capDir, backDir, BOARD_CAP,
   mmPerPx, px2cm2, bom, checks, colorDist,
 };
 root.NunuCore = api;

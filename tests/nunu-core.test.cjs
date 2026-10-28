@@ -351,3 +351,23 @@ test('三块发片画板：前发是比脸盖大一圈的圆盘，后发是后�
   const mi = C.mirrorOf({ byId: { [back.id]: back } }, back.id, bb.x + 100, bb.y + 50);
   assert.equal(mi.pieceId, back.id); near(mi.x, 2 * (bb.x + bb.w / 2) - (bb.x + 100), 1e-9);
 });
+
+test('省道：后脑叶子下面的 V 形缺口是省道，两边缝在一起；3D 里缺口两边的点贴在一起；别的片（月牙、腿缝）不算省道', () => {
+  const d = doc();
+  for (const id of ['leafL', 'leafR']) {
+    const p = d.byId[id];
+    assert.equal(p.darts.length, 1, `${id} 有一个省道`);
+    const dt = p.darts[0];
+    assert.ok(dt.left.length >= 6);
+    near(dt.lenL, dt.lenR, Math.max(dt.lenL, dt.lenR) * 0.15, `${id} 省道两边一样长`);
+    const mid = Math.floor(dt.left.length / 2), y = dt.left[mid][1];
+    const a = C.pieceDir(p, dt.left[mid][0] - 0.01, y), b = C.pieceDir(p, dt.right[mid][0] + 0.01, y);
+    near(Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]), 0, 0.02, `${id} 缺口两边在 3D 里合上了`);
+  }
+  for (const id of ['top', 'big', 'bodyA', 'bodyB', 'face']) assert.equal(d.byId[id].darts.length, 0, `${id} 没有省道`);
+  const ok = C.checks(d, {}, { faceMm: 100 });
+  assert.ok(ok.some((c) => c.level === 'ok' && /省道/.test(c.text)));
+  // 省道缝合以后，这一行的宽度比不算缺口的外接宽度小（缝上缺口就合上了）：缺口两边的 φ 经度差为 0，而叶子两端仍然是 红边 ↔ 黄边
+  const L = d.byId.leafL, row = Math.round(0.97 * 96), iv = L.rows.iv[row];
+  assert.ok(iv.length >= 2, '靠下面的行被省道分成两段');
+});
