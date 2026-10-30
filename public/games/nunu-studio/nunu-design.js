@@ -200,7 +200,7 @@ function add(d,layer,poly,color){
  // ★ 新片就长在你画的地方，不再自动往发际线上拽。
  //   以前一新建就被 snapRoot 拖去贴发际线，翘出脑袋、往外长的发片全被拉回头顶，堆成一坨圆脑袋；
  //   想让它回到发际线上，点「↥ 贴回发际线」或切成「🧵 缝在发际线」——那时候才挪。
- if(layer==='hair'){o.attach=attachKind(d,o);o.fabric=defaultFabric;markRoot(d,id);}
+ if(layer==='hair'){o.attach=attachKind(d,o);o.fabric=defaultFabric;o.onBack=defaultOnBack;markRoot(d,id);}
  return id;
 }
 function reshape(d,id,poly){if(!valid(poly))throw Error('轮廓不能交叉或太小。');const o=d.objects.find(x=>x.id===id);if(!o)throw Error('请先选中要修改的片。');o.poly=copy(poly);if(o.layer==='face')o.custom=true;if(o.layer==='hair')markRoot(d,id);}
@@ -399,14 +399,14 @@ function patternDesigns(base,d){
  *  圆外面的点（翘出头外的发片）从轮廓边上顺着往外长。
  *  mesh：pillowMesh 出来的网格；uvs / box：stub 里每个顶点在设计台里的位置（0..1 + 外接框）；
  *  zBase：平放时离头中心面的距离（place.z 的绝对值）；side：+1 前片、-1 后片；fb：脸（圆）的外接框。 */
-function conformToHead(mesh,uvs,box,side,zBase,fb){
+function conformToHead(mesh,uvs,box,side,zBase,fb,back){
  const GAP=0.03,R=C.TARGETS.head.r,P=C.TARGETS.head.pos,EDGE=0.97;
  /** 第 i 个顶点，离头表面 hv（沿法线）的位置 */
  const place=(i,hv)=>{
   const px=box.x+uvs[i*2]*box.w,py=box.y+uvs[i*2+1]*box.h;
   const a=(px-fb.x-fb.w/2)/(fb.w/2),b=(fb.y+fb.h/2-py)/(fb.h/2),r=Math.hypot(a,b);
   const k=r>EDGE?EDGE/r:1,a2=a*k,b2=b*k,c=Math.sqrt(Math.max(0,1-a2*a2-b2*b2));
-  const sx=R[0]*a2,sy=P[1]+R[1]*b2,sz=P[2]+R[2]*c;
+  const sg=back?-1:1,sx=R[0]*a2,sy=P[1]+R[1]*b2,sz=P[2]+sg*R[2]*c;      // 后脑 = 同一个投影位置，落在球的背面
   let nx=sx/(R[0]*R[0]),ny=(sy-P[1])/(R[1]*R[1]),nz=(sz-P[2])/(R[2]*R[2]);
   const nl=Math.hypot(nx,ny,nz)||1;nx/=nl;ny/=nl;nz/=nl;
   const out=r>EDGE?(r-EDGE):0;                          // 轮廓以外的部分顺着往外长
@@ -511,6 +511,7 @@ const FABRICS={
 };
 const FABRIC_ALIAS={rabbit:'longbrush'};   // 旧存档里叫「兔毛」的，按长刷花兔毛算
 let defaultFabric='plush';
+let defaultOnBack=false;      // 现在看的是背面：新长的发片画在脑袋后面
 const fabricOf=o=>FABRICS[o&&(FABRIC_ALIAS[o.fabric]||o.fabric)]||FABRICS.plain;
 const FUR_UNIT=0.03*0.6,FUR_MAX=0.5;           // 1mm 绒长 ≈ 0.03 个 3D 单位，毛压一压只算 6 成
 function hexRgb(h){const m=/^#?([0-9a-f]{6})$/i.exec(h||'');const n=m?parseInt(m[1],16):0x7d594a;return [n>>16&255,n>>8&255,n&255];}
@@ -650,16 +651,16 @@ function template(base,d){
     const tk=Math.min(FUR_MAX,Math.max(0.02,fabricOf(o).pile*FUR_UNIT)),zb=attachKind(d,o)==='sewn'?0.28:0.34;
     let baseAt;
     if(sphereHead){
-     const place=conformToHead(p.mesh,m.uv,b,side,zb-tk,faceBox);       // 正面 = 贴着头 + 绒长
+     const place=conformToHead(p.mesh,m.uv,b,side,zb-tk,faceBox,!!o.onBack);       // 正面 = 贴着头 + 绒长
      baseAt=i=>place(i,0.03+stack*0.012);                                // 底面 = 贴着头（或压在下一层上）
     }else{
      const z0=p.mesh.pos.filter((_,i)=>i%3===2);
      for(let i=2;i<p.mesh.pos.length;i+=3)p.mesh.pos[i]+=side*tk;        // 平的头（2.5D / 自创体）：正面往外抬 绒长
      baseAt=i=>[p.mesh.pos[i*3],p.mesh.pos[i*3+1],z0[i]];
     }
-    p.mesh._wall={baseAt,m,b,side,dx,dy};   // 等 uv 建好以后再长侧面
+    p.mesh._wall={baseAt,m,b,side,dx,dy,flipZ:!sphereHead&&!!o.onBack};   // 等 uv 建好以后再长侧面
    }
-   if(p.mesh._wall){const w=p.mesh._wall;delete p.mesh._wall;addWalls(p.mesh,w.m,w.b,w.side,w.dx,w.dy,w.baseAt);}
+   if(p.mesh._wall){const w=p.mesh._wall;delete p.mesh._wall;addWalls(p.mesh,w.m,w.b,w.side,w.dx,w.dy,w.baseAt);if(w.flipZ)for(let i=2;i<p.mesh.pos.length;i+=3)p.mesh.pos[i]*=-1;}
    if(sphereHead&&o.layer==='clothes'&&!solid){if(bodySurf===undefined)bodySurf=bodySurfaceOf(t,d);if(bodySurf)conformToBody(p.mesh,m.uv,b,side,0.23,bodySurf);}
    if(solid){
     const n=poly.length,opening=Math.max(1,Math.min(n-2,Math.round(n*0.06)));
@@ -1296,6 +1297,7 @@ function acceptShape() {
    * 不是整张图纸的体型（2.5D 白坯）不分页，还是原来那样。 */
   const pageMode = () => shapeLocked();
   const visibleIn = (o) => {
+    if (o.layer === 'hair') return !!o.onBack === (side === 'back');   // 发片：正面看正面的，背面看背面的，不再混在一起
     if (!pageMode()) return true;
     if (o.piece && !(layer === 'face' && side === 'back')) return false;   // 后脑两片只在「面部·背面」页出现
     if (layer === 'face') return o.layer === 'face' && (side === 'back' ? !!o.piece : !o.piece);
@@ -2293,7 +2295,7 @@ function acceptShape() {
     say(k === 'sewn' ? '改成缝了，根部已贴回发际线，沿发际线加固缝一圈。' : '改成贴了 —— 在发际线涂胶，从发际线往下压着贴。');
   });
   host.querySelectorAll('[data-dside]').forEach(b => b.onclick = () => {
-    side = b.dataset.dside; sync(); if (pageMode()) focusLayer(); if (api.view) api.view(side === 'back' ? 'back' : 'front');
+    side = b.dataset.dside; defaultOnBack = side === 'back'; sync(); if (pageMode()) focusLayer(); if (api.view) api.view(side === 'back' ? 'back' : 'front');
   });
   host.querySelectorAll('[data-dview]').forEach(b => b.onclick = () => api.view && api.view(b.dataset.dview));
   host.querySelectorAll('[data-daction]').forEach(b => b.onclick = () => {
@@ -2459,5 +2461,5 @@ function acceptShape() {
   };
 }
 
-root.NunuDesign = { FABRICS, setDefaultFabric:k=>{if(FABRICS[k])defaultFabric=k;}, hairPreset, patternDesigns, initial, ordered, valid, add, move, resize, reshape, template, paint, paperView, symmetricOutline, dartOutline, addEars, mount, getImg, imgReady, imgCovers, hairline, hairlineAt, centroid, rootOf, snapRoot, markRoot, shiftPart, attachKind, maskFromRGBA, hairPiecesFromImage, onImageReady: fn => { imageHook = fn; } };
+root.NunuDesign = { setDefaultSide:b=>{defaultOnBack=!!b;}, FABRICS, setDefaultFabric:k=>{if(FABRICS[k])defaultFabric=k;}, hairPreset, patternDesigns, initial, ordered, valid, add, move, resize, reshape, template, paint, paperView, symmetricOutline, dartOutline, addEars, mount, getImg, imgReady, imgCovers, hairline, hairlineAt, centroid, rootOf, snapRoot, markRoot, shiftPart, attachKind, maskFromRGBA, hairPiecesFromImage, onImageReady: fn => { imageHook = fn; } };
 })(typeof window === 'undefined' ? globalThis : window);
