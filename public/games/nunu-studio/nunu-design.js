@@ -1648,6 +1648,8 @@ function acceptShape() {
       bodiesBox.innerHTML = list.map(b => `<button type="button" data-body="${b.id}" class="${b.on ? 'on' : ''}" title="${b.name}">${b.name}</button>`).join('');
       bodiesBox.querySelectorAll('[data-body]').forEach(btn => { btn.onclick = () => { if (!btn.classList.contains('on') && api.pickBody) api.pickBody(btn.dataset.body); }; });
     }
+    // 手机端：点预览卡的标题可以收起 / 展开，给画布腾地方
+    { const pc = host.querySelector('.dsPreviewCard h2'); if (pc) pc.addEventListener('click', () => pc.closest('.dsPreviewCard').classList.toggle('min')); }
     const bodyNote = host.querySelector('#dsBodyNote');
     if (bodyNote) bodyNote.textContent = locked ? '这套是整张图纸：外形固定，只画脸 / 身体、加发片 / 衣服。' : '这套可以改体型（拖方框 / 涂形状）。';
     const fabRow = host.querySelector('#designFabricRow');

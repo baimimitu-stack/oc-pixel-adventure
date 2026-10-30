@@ -561,3 +561,39 @@ tr.pick:hover, tr.pick.on { background: #fff3d1; }
 .fcTl-news .fcTlType { background: #e6dcff; }
 .fcTlBody { display: grid; gap: 2px; min-width: 0; word-break: break-word; }
 .fcTlBody small { color: var(--ink-soft); }
+
+/* ===== 手机端：画布在上，3D 预览钉在底栏上方 =====
+   做法：把 .ds / .dsBody 摊平成一列，用 order 排顺序；预览卡 sticky 贴在底栏之上，
+   一边画一边能看到立起来的样子，往下翻工具也不会丢。画布本身 touch-action:none，不会和页面滚动抢手势。 */
+@media (max-width: 760px) {
+  html, body { overflow-x: clip; }
+  .ds { display: flex; flex-direction: column; max-width: 100vw; }
+  .dsBody { display: contents; }
+  .dsTools, .dsBodyBar, .dsLayers { flex-wrap: wrap; padding-left: 10px; padding-right: 10px; max-width: 100vw; box-sizing: border-box; }
+  .dsGroup { flex-wrap: wrap; max-width: 100%; }
+  .dsPalette { max-width: 100%; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .dsPalette .dsChip { flex: none; width: 28px; height: 28px; }
+  .dsTools { gap: 4px 8px; padding-top: 4px; padding-bottom: 4px; }
+  .dsTools3 input[type=range], .dsGroup input[type=range] { width: 120px; }
+
+  .dsCanvasCard { order: 1; margin: 6px 10px 0; }
+  .dsTools:not(.dsTools3):not(.dsTools4):not(.dsTools5):not(.dsTools6) { order: 2; }
+  .dsPreviewCard { order: 3; position: sticky; bottom: 68px; z-index: 6; margin: 8px 10px 0; box-shadow: 0 -3px 0 rgba(63,43,26,.25), var(--shadow-s); }
+  .dsPreviewCard > header { padding: 4px 8px; }
+  .dsPreviewCard > header h2 { font-size: 12px; }
+  .dsPreviewCard .dsMini button { padding: 3px 7px; font-size: 11px; }
+  .ds3d { aspect-ratio: auto; height: clamp(120px, 18dvh, 160px); }
+  .dsPreviewCard.min .ds3d, .dsPreviewCard.min #designPreview { display: none; }
+  .dsPreviewCard > header h2 { cursor: pointer; }
+  .dsPreviewCard > header h2::after { content: ' ▾'; } .dsPreviewCard.min > header h2::after { content: ' ▴'; }
+  .dsPreviewCard #designPreview { max-height: 26dvh; width: auto; margin: 0 auto; }
+  .dsBodyBar { order: 4; } .dsLayers { order: 4; } .dsTools3, .dsTools4, .dsTools5, .dsTools6 { order: 5; }
+  .dsSide { order: 6; margin: 8px 10px 0; }
+  .dsStatus { order: 7; }
+  .dsStageWrap canvas { height: clamp(250px, calc(100dvh - 520px), 520px); }
+  .dsCanvasCard > header { padding: 6px 8px; }
+  .dsCanvasCard > header h2 { font-size: 13px; }
+  .dsHint { display: none; }
+  .bottombar { width: 100vw; left: 0; right: 0; }
+  .pages { padding-bottom: 90px; }
+}
