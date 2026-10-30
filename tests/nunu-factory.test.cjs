@@ -171,3 +171,13 @@ test('手作娘接单区：必须选第三方平台 + 写店铺名；不能提�
   assert.equal(post({ body: '手作接单，20cm 努努 80 元起，付款后扫码确认工期两周内发货。' }).ok, false);
   assert.equal(post({ body: '手作接单，20cm 努努 80 元起，加我微信聊款式和工期两周。' }).ok, false);
 });
+
+test('管理员：权重按「高」放宽，一票算 3 票', () => {
+  const adm = { id: 'u-adm', created: NOW, works: 0, rated: 0, admin: true };
+  const w = F.weightOf(adm, NOW);
+  assert.equal(w.level, 'high'); assert.equal(w.weight, 3); assert.equal(w.name, '管理员');
+  const r = F.judgeVote({ account: adm, now: NOW, factory: fac('b'), score: 2, records: [rec(adm.id, 'a', 10, 3, 'high')] });
+  assert.equal(r.ok, true, '同一天一高一低也放行');
+  assert.equal(r.weight, 3);
+  assert.equal(F.weightOf({ ...adm, admin: false }, NOW).level, 'low', '不是管理员就回到按使用情况算');
+});

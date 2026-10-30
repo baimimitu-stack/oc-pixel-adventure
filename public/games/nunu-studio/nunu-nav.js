@@ -65,7 +65,7 @@
   }
   const saveStore = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch { toast('存储空间满了，这次没存上。请先下载备份、删掉一些图片帖。'); } };
   const readWorks = () => { try { const l = JSON.parse(localStorage.getItem('nunu-v4-design-projects')); return (Array.isArray(l) ? l.length : 0) + 1; } catch { return 1; } };
-  const accountNow = () => ({ ...store.account, works: readWorks() });
+  const accountNow = () => ({ ...store.account, works: readWorks(), admin: !!(USER && USER.isAdmin) });
   const guard = () => { if (USER) return true; toast('请先登录：到「我的」页 → 登录 / 注册。'); openLogin(); return false; };
   const allFactories = () => [...FACTORIES, ...store.uploads.map(u => ({ id: u.id, name: u.name, tags: u.tags, note: u.note, owner: u.owner, base: 0, votes: 0, isNew: true }))];
   /* 站长维护的名单（public/games/nunu-studio/sponsors.json）：认证的娃厂、微信号、感谢榜。谁打钱了就在这个文件里加一行。 */

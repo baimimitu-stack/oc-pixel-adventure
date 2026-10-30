@@ -19,12 +19,14 @@
   const LEVEL_NAME = { low: '低（新账号）', mid: '中', high: '高' };
   const SPIKE_CAP = 1.5;                               // 一家一天里，非高权重账号的极端分，最多让总权重涨这么多
   const DAY = 864e5;
+  const ADMIN_WEIGHT = 3;
 
   /** 日期键：按本地时间的自然日算 */
   const dayKey = (ts) => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
   /** 账号权重：用了几天 / 做了几只娃娃 / 评过几次 */
   function weightOf(account, now = Date.now()) {
+    if (account.admin) return { score: 1, level: 'high', weight: ADMIN_WEIGHT, name: '管理员' };   // 站长：按「高」放宽规矩，一票算 3 票
     const ageDays = Math.max(0, (now - (account.created || now)) / DAY);
     const s = 0.4 * Math.min(1, ageDays / 14) + 0.3 * Math.min(1, (account.works || 0) / 3) + 0.3 * Math.min(1, (account.rated || 0) / 20);
     const level = s >= 0.7 ? 'high' : s >= 0.35 ? 'mid' : 'low';
