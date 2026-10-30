@@ -431,7 +431,7 @@
       <p class="mineTip">赞助 = 打赏站长，用来维护服务器和图纸。想让你的名字上感谢榜：打赏后告诉站长，经你同意就放上去。</p>
       <p class="mineTip"><b>娃厂想入驻</b>：打赏后加站长微信，发<b>赞助码 + 娃厂名字 + 客服联系方式</b>，站长确认后加「✔ 已入驻」，玩家点进娃厂就能直接联系客服。</p>
       <p class="mineTip"><b>娃厂入驻认证：${esc(SPON.joinPrice || '200 元')}</b>（打赏时备注娃厂名字，再按上面的方式联系站长）。赞赏码：</p>
-      <img src="donate.png?v=1" alt="站长赞赏码" class="mineDonate" onerror="this.style.display='none'">
+      <img src="donate.png?v=2" alt="站长赞赏码" class="mineDonate" onerror="this.style.display='none'">
       <p class="mineTip">站长微信：<b>${SPON.ownerWechat ? esc(SPON.ownerWechat) : '（站长还没公布，公布后会写在这里）'}</b></p>
       <p class="mineTip" style="color:var(--ink-soft)">入驻只代表有官方客服入口，不代表质量，也不影响评分和排序；平台不负责后续对接（下单、付款、售后、纠纷）。</p>`;
     const ul = $('#thanksList');
