@@ -545,3 +545,4 @@ tr.pick:hover, tr.pick.on { background: #fff3d1; }
 .adAdd { display: flex; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
 .adAdd input { flex: 1; min-width: 120px; padding: 5px 7px; border: 2px solid var(--line); font: inherit; background: #fff; }
 #loginDlg .fmTabs { margin: 8px 0; }
+.mineDonate { display: block; width: 180px; max-width: 100%; border: 2px solid var(--line); margin: 4px 0; }

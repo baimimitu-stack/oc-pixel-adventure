@@ -39,15 +39,7 @@
   syncWhenReady();
 
   /* ============ 娃厂红黑榜 ============ */
-  // ⚠️ 示例厂牌都是虚构名，避免影射真实娃厂；联网之后换成真实数据。
-  const FACTORIES = [
-    { id: 'fx1', name: '云朵朵工坊', tags: ['做工细', '发货快', '回复甜'], base: 9.2, votes: 128 },
-    { id: 'fx2', name: '栗子壳玩偶厂', tags: ['版型准', '充棉足'], base: 8.8, votes: 96 },
-    { id: 'fx3', name: '奶黄包制造所', tags: ['性价比高', '好沟通'], base: 8.5, votes: 77 },
-    { id: 'fx4', name: '慢吞吞工坊', tags: ['拖工期', '回复慢'], base: 5.4, votes: 64 },
-    { id: 'fx5', name: '粗线条工厂', tags: ['线头多', '品控飘'], base: 4.8, votes: 58 },
-    { id: 'fx6', name: '翻车鱼玩偶社', tags: ['翻车多', '色差大'], base: 3.9, votes: 83 },
-  ];
+  const FACTORIES = [];   // 没有任何预置娃厂：榜单上只会出现真实有人上传、有人评过的娃厂
   const F = window.NunuFactory;
   const STORE_KEY = 'nunu-factory-v2';
   const esc = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -123,6 +115,7 @@
     redList.innerHTML = ''; blackList.innerHTML = '';
     ranked.slice(0, 3).forEach((f, i) => redList.appendChild(factoryItem(f, i + 1, true)));
     ranked.slice(-3).reverse().forEach((f, i) => blackList.appendChild(factoryItem(f, i + 1, false)));
+    if (!ranked.length) { const msg = '<li class="fcEmpty">还没有娃厂有评分。点右上角「＋ 上传娃厂」添加，大家评过以后才会上榜。</li>'; redList.innerHTML = msg; blackList.innerHTML = msg; }
     // 全部娃厂：榜上没有的（新上传的、中间的）也能点进去评价
     const all = $('#fcAllList');
     if (all) {
@@ -268,16 +261,7 @@
     { k: 'biz', name: '🏭 娃厂业务', tip: '只有已入驻的娃厂能发：接单、活动、新品、招人合作。' },
   ];
   const BIZ_CAT_NAME = { order: '接单 / 开单', event: '活动 / 优惠', new: '新品上线', recruit: '招人 / 合作', other: '其他' };
-  const SEED_POSTS = [
-    { id: 'sp1', board: 'avoid', title: '示例：下单前先问清楚工期', body: '示例帖（虚构，演示用）：付款之前先问清楚工期和能不能退换，把聊天记录留好；说「很快」不等于能按时发。', by: 'seed', f: '', ts: Date.now() - 864e5 * 3, seedLikes: 23, likes: [], flags: [], example: true },
-    { id: 'sp2', board: 'avoid', title: '示例：色差要看实拍图', body: '示例帖（虚构，演示用）：棉花娃的颜色看屏幕和实物差很多，下单前让对方发自然光下的实拍。', by: 'seed', f: '', ts: Date.now() - 864e5 * 2, seedLikes: 15, likes: [], flags: [], example: true },
-    { id: 'sp3', board: 'repo', title: '示例：收到 20cm 努努，做工细节', body: '示例帖（虚构，演示用）：线头少、充棉均匀，脸片五官位置和图纸对得上；就是发货比约定晚了三天。', by: 'seed', f: '', ts: Date.now() - 864e5 * 2, seedLikes: 31, likes: [], flags: [], example: true },
-    { id: 'sp4', board: 'repo', title: '示例：长刷花兔毛 vs 5mm 兔毛的上手对比', body: '示例帖（虚构，演示用）：长毛发片蓬、软但会掉毛、要顺毛流裁；5mm 兔毛贴头型更服帖，新手建议先用短毛。', by: 'seed', f: '', ts: Date.now() - 864e5, seedLikes: 18, likes: [], flags: [], example: true },
-    { id: 'sp5', board: 'tips', title: '示例：脖子处留一点松量', body: '示例帖（虚构，演示用）：头和身体接的地方棉花别塞太满，留一点松量，娃娃才能自然歪头。', by: 'seed', f: '', ts: Date.now() - 864e5, seedLikes: 12, likes: [], flags: [], example: true },
-    { id: 'sp6', board: 'promo', title: '示例：我自己做的第一只努努', body: '示例帖（虚构，演示用）：脸片五官是自己画的，发片用的是普毛，欢迎来给建议。', by: 'seed', f: '', ts: Date.now() - 864e5, seedLikes: 9, likes: [], flags: [], example: true },
-    { id: 'sp8', board: 'maker', platform: '闲鱼', shop: '示例手作坊', title: '示例：接 20cm 棉花娃娃单子', body: '示例帖（虚构，演示用）：手作接单，款式见闲鱼店铺，工期两周，请在平台内下单。', by: 'seed', f: '', ts: Date.now() - 864e5, seedLikes: 7, likes: [], flags: [], example: true },
-    { id: 'sp7', board: 'biz', cat: 'event', title: '示例：周年活动开启', body: '示例帖（虚构，演示用）：入驻娃厂可以在这里发接单 / 活动 / 新品 / 招人合作的信息，按分类筛选。', by: 'seed', f: 'fx1', ts: Date.now() - 864e5, seedLikes: 5, likes: [], flags: [], example: true },
-  ];
+  const SEED_POSTS = [];   // 没有预置帖子
   let fmTab = 'avoid', fmCat = '';
   const allPosts = () => [...SEED_POSTS, ...store.posts];
   const likeCount = (p) => (p.seedLikes || 0) + (p.likes || []).length;
@@ -433,9 +417,9 @@
       <h3>社区公约</h3><p>大家都是<b>为爱发电</b>，不是客服。教程、经验、帖子的作者没有义务回复你：请不要反复私信、催更；<b>不回你是正常的</b>。请保持礼貌，先自己多探索（搜帖子、看说明书、动手试试），再提问，提问时写清楚你试过什么。</p>
       <h3>账号、备份</h3><p>现在没有服务器（没钱），账号、作品、评分、帖子、私信都只存在<b>你自己的浏览器</b>里：清缓存、换浏览器、换设备数据就没了，忘记密码也没法找回。请在「我的」页<b>及时「下载备份」</b>，换设备时「导入备份」。</p>
       <h3>账号权重</h3><p>用得越久、做的娃娃越多、评得越多，权重越高。新账号的票更轻，限制也更严；权重高了放宽。</p>
-      <h3>娃厂入驻（付费）</h3><p>娃厂想入驻：打赏站长后，到「我的」页看站长微信，把<b>赞助码 + 娃厂名字 + 客服联系方式</b>发过去，站长确认后加上「✔ 已入驻」，玩家点进娃厂就能看到客服。<b>入驻只代表有官方客服入口，不代表质量，也不影响评分和榜单排序。</b>平台不负责下单、付款、售后、纠纷等后续对接。</p>
+      <h3>娃厂入驻（付费，目前 200 元）</h3><p>娃厂想入驻：打赏站长后，到「我的」页看站长微信，把<b>赞助码 + 娃厂名字 + 客服联系方式</b>发过去，站长确认后加上「✔ 已入驻」，玩家点进娃厂就能看到客服。<b>入驻只代表有官方客服入口，不代表质量，也不影响评分和榜单排序。</b>平台不负责下单、付款、售后、纠纷等后续对接。</p>
       <h3>感谢榜</h3><p>打赏过站长的，经本人同意，名字会放进「我的」页的感谢榜。</p>
-      <h3>数据在哪</h3><p>现在评分、评论、帖子都存在你自己的浏览器里，别人看不到，清掉浏览器数据就没了；示例厂和示例帖是虚构的。联网同步上线后才会是大家共用的。</p>`);
+      <h3>数据在哪</h3><p>现在评分、评论、帖子都存在你自己的浏览器里，别人看不到，清掉浏览器数据就没了。联网同步上线后才会是大家共用的。</p>`);
     const dlg = $('#fcGuide'); dlg.querySelector('.fcX').onclick = () => dlg.close();
   }
   ['#fcHelp', '#fmHelp'].forEach(sel => { const b = $(sel); if (b) b.addEventListener('click', openGuide); });
@@ -446,6 +430,8 @@
     if (box) box.innerHTML = `<h2>🤝 赞助与娃厂入驻</h2>
       <p class="mineTip">赞助 = 打赏站长，用来维护服务器和图纸。想让你的名字上感谢榜：打赏后告诉站长，经你同意就放上去。</p>
       <p class="mineTip"><b>娃厂想入驻</b>：打赏后加站长微信，发<b>赞助码 + 娃厂名字 + 客服联系方式</b>，站长确认后加「✔ 已入驻」，玩家点进娃厂就能直接联系客服。</p>
+      <p class="mineTip"><b>娃厂入驻认证：${esc(SPON.joinPrice || '200 元')}</b>（打赏时备注娃厂名字，再按上面的方式联系站长）。赞赏码：</p>
+      <img src="donate.png?v=1" alt="站长赞赏码" class="mineDonate" onerror="this.style.display='none'">
       <p class="mineTip">站长微信：<b>${SPON.ownerWechat ? esc(SPON.ownerWechat) : '（站长还没公布，公布后会写在这里）'}</b></p>
       <p class="mineTip" style="color:var(--ink-soft)">入驻只代表有官方客服入口，不代表质量，也不影响评分和排序；平台不负责后续对接（下单、付款、售后、纠纷）。</p>`;
     const ul = $('#thanksList');
