@@ -67,15 +67,16 @@
   const readWorks = () => { try { const l = JSON.parse(localStorage.getItem('nunu-v4-design-projects')); return (Array.isArray(l) ? l.length : 0) + 1; } catch { return 1; } };
   const accountNow = () => ({ ...store.account, works: readWorks(), admin: !!(USER && USER.isAdmin) });
   const guard = () => { if (USER) return true; toast('请先登录：到「我的」页 → 登录 / 注册。'); openLogin(); return false; };
-  const allFactories = () => [...FACTORIES, ...store.uploads.map(u => ({ id: u.id, name: u.name, tags: u.tags, note: u.note, owner: u.owner, base: 0, votes: 0, isNew: true }))];
+  const adminFactories = () => (SPON.factories || []).map(f => ({ id: 'sf-' + f.name, name: f.name, tags: f.tags || [], note: f.note || '', specialties: f.specialties || [], platforms: f.platforms || [], base: 0, votes: 0, fromAdmin: true }));
+  const allFactories = () => [...FACTORIES, ...adminFactories(), ...store.uploads.filter(u => !(SPON.factories || []).some(f => f.name === u.name)).map(u => ({ id: u.id, name: u.name, tags: u.tags, note: u.note, owner: u.owner, base: 0, votes: 0, isNew: true }))];
   /* 站长维护的名单（public/games/nunu-studio/sponsors.json）：认证的娃厂、微信号、感谢榜。谁打钱了就在这个文件里加一行。 */
-  let SPON = { ownerWechat: '', joined: [], thanks: [], notices: [], admin: null };
+  let SPON = { ownerWechat: '', joined: [], thanks: [], notices: [], factories: [], admin: null };
   const DRAFT_KEY = 'nunu-admin-draft';
   const applyDraft = () => { if (USER && USER.isAdmin) { try { const d = JSON.parse(localStorage.getItem(DRAFT_KEY)); if (d) SPON = { ...SPON, ...d }; } catch { /* 草稿坏了就不用 */ } } };
   /* 入驻 = 站长名单里有这家：joined 里每一项是娃厂名字（字符串），或 { name, service: '客服怎么联系' } */
-  const joinOf = (f) => { const hit = SPON.joined.find(v => (typeof v === 'string' ? v : (v.id || v.name)) === f.id || (typeof v === 'string' ? v : v.name) === f.name); return hit ? { service: typeof hit === 'string' ? '' : (hit.service || '') } : null; };
+  const joinOf = (f) => { const own = (SPON.factories || []).find(x => x.name === f.name && (x.service || x.joined)); if (own) return { service: own.service || '' }; const hit = SPON.joined.find(v => (typeof v === 'string' ? v : (v.id || v.name)) === f.id || (typeof v === 'string' ? v : v.name) === f.name); return hit ? { service: typeof hit === 'string' ? '' : (hit.service || '') } : null; };
   const isVerified = (f) => !!joinOf(f);
-  const loadSpon = () => fetch('sponsors.json?t=' + Date.now()).then(r => r.ok ? r.json() : null).then(j => { if (j) { SPON = { ownerWechat: '', joined: [], thanks: [], notices: [], admin: null, ...j }; SPON.joined = SPON.joined || j.verified || []; SPON._remote = JSON.parse(JSON.stringify(SPON)); applyDraft(); renderNotices(); renderFactory(); renderMineSponsor(); } }).catch(() => { /* 没有这个文件就当没人 */ });
+  const loadSpon = () => fetch('sponsors.json?t=' + Date.now()).then(r => r.ok ? r.json() : null).then(j => { if (j) { SPON = { ownerWechat: '', joined: [], thanks: [], notices: [], factories: [], admin: null, ...j }; SPON.joined = SPON.joined || j.verified || []; SPON._remote = JSON.parse(JSON.stringify(SPON)); applyDraft(); renderNotices(); renderFactory(); renderMineSponsor(); } }).catch(() => { /* 没有这个文件就当没人 */ });
   const myVoteCount = () => store.records.filter(r => r.by === store.account.id).length;
   const todayLeft = () => F.DAILY_LIMIT - store.records.filter(r => r.by === store.account.id && r.day === F.dayKey(Date.now())).length;
 
@@ -163,6 +164,8 @@
       <header><h2>${esc(f.name)}${f.isNew ? ' <span class="fcTag">新上传</span>' : ''}</h2><button type="button" class="fcX" aria-label="关闭">✕</button></header>
       <div class="fcTagsRow">${f.tags.map(t => `<span class="fcTag">${esc(t)}</span>`).join('')}</div>
       ${f.note ? `<p class="fcNoteTxt">${esc(f.note)}</p>` : ''}
+      ${(f.specialties && f.specialties.length) ? `<p class="fcSpec"><b>擅长体型：</b>${f.specialties.map(x => `<span class="fcTag">${esc(x)}</span>`).join('')}</p>` : ''}
+      ${(f.platforms && f.platforms.length) ? `<p class="fcSpec"><b>其他平台账号：</b>${f.platforms.map(x => `<span class="fcPlat">${esc(x.platform)}${x.account ? '：' + esc(x.account) : ''}</span>`).join('')}<small>${f.fromAdmin ? '站长录入；' : ''}仅供搜索，不是跳转链接；下单请走平台内交易。</small></p>` : ''}
       <div class="fcBig"><span class="fcNum">${s.score == null ? '—' : s.score.toFixed(1)}</span><span class="fcStars">${s.score == null ? '还没人评' : stars(s.score)}</span><span class="fcMeta">${s.votes} 人评过${s.mine ? ' · 我最近打了 ' + s.mine + ' 分' : ''}</span></div>
       <h3>联系客服</h3>
       ${(() => { const j = joinOf(f); return j
@@ -540,13 +543,18 @@
    * 改的是「草稿」：存在本机、立刻在你自己的浏览器里生效；点「导出 sponsors.json」下载，替换项目里的文件并上线，所有人才能看到。 */
   function openAdmin() {
     if (!USER || !USER.isAdmin) { toast('只有管理员能打开管理台。'); return; }
-    const draft = () => { let d = null; try { d = JSON.parse(localStorage.getItem(DRAFT_KEY)); } catch { /* 无草稿 */ } return d || { ownerWechat: SPON.ownerWechat || '', joined: JSON.parse(JSON.stringify(SPON.joined || [])), thanks: JSON.parse(JSON.stringify(SPON.thanks || [])), notices: JSON.parse(JSON.stringify(SPON.notices || [])) }; };
-    let d = draft();
+    const draft = () => { let d = null; try { d = JSON.parse(localStorage.getItem(DRAFT_KEY)); } catch { /* 无草稿 */ } return d || { ownerWechat: SPON.ownerWechat || '', factories: JSON.parse(JSON.stringify(SPON.factories || [])), joined: JSON.parse(JSON.stringify(SPON.joined || [])), thanks: JSON.parse(JSON.stringify(SPON.thanks || [])), notices: JSON.parse(JSON.stringify(SPON.notices || [])) }; };
+    let d = draft(); if (!d.factories) d.factories = [];
     const commit = () => { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); applyDraft(); renderFactory(); renderMineSponsor(); renderNotices(); };
     const dlg = dialogShell('adminDlg', `
       <header><h2>🛠 管理台</h2><button type="button" class="fcX" aria-label="关闭">✕</button></header>
       <p class="fcNoteTxt">这里改的是<b>草稿</b>：存在本机、立刻在你的浏览器里生效。想让所有人看到：点最下面「导出 sponsors.json」，替换项目里 <code>public/games/nunu-studio/sponsors.json</code> 再上线。</p>
       <h3>站长微信（显示在「我的」页）</h3><input id="adWx" value="${esc(d.ownerWechat)}" maxlength="40" style="width:100%;box-sizing:border-box">
+      <h3>批量添加娃厂（会出现在所有人的娃厂列表里）</h3>
+      <p class="fcNoteTxt">每行一家，用 <code>|</code> 或 Tab 隔开（从 Excel 复制过来就是 Tab）：<br><code>名字 | 标签 | 擅长体型 | 其他平台账号 | 简介 | 客服</code><br>标签、擅长体型用逗号隔开；其他平台账号写成 <code>闲鱼:账号名;小红书:账号名</code>；客服填了就算「已入驻」。也可以直接粘 JSON 数组。</p>
+      <textarea id="adBulk" rows="5" style="width:100%;box-sizing:border-box" placeholder="云朵朵工坊|做工细,发货快|2.5D,努努|闲鱼:yunduo;小红书:云朵朵|慢工出细活|客服 kf01"></textarea>
+      <div class="adAdd"><button type="button" class="fcMini" id="adBulkGo">解析并加入</button><span id="adBulkMsg" class="fcMsg"></span></div>
+      <h3>站长录入的娃厂（<span id="adFacN">0</span>）</h3><ul class="adList" id="adFacs"></ul>
       <h3>入驻娃厂（有「✔ 已入驻」标记和官方客服）</h3><ul class="adList" id="adJoined"></ul>
       <div class="adAdd"><input id="adJName" placeholder="娃厂名字（要和上传时一致）" maxlength="16"><input id="adJSvc" placeholder="客服怎么联系" maxlength="40"><button type="button" class="fcMini" id="adJGo">加入驻</button></div>
       <h3>感谢榜（经本人同意再加）</h3><ul class="adList" id="adThanks"></ul>
@@ -560,19 +568,27 @@
       arr.forEach((x, i) => { const li = document.createElement('li'); li.innerHTML = `<span>${esc(text(x))}</span><button type="button" class="fcMini">删</button>`; li.querySelector('button').onclick = () => { arr.splice(i, 1); commit(); paint(); }; ul.appendChild(li); });
     };
     const paint = () => {
+      dlg.querySelector('#adFacN').textContent = d.factories.length;
+      list('#adFacs', d.factories, x => `${x.name}｜${(x.specialties || []).join('、')}｜${(x.platforms || []).map(p => p.platform + ':' + p.account).join(';')}${x.service ? '｜✔ 客服 ' + x.service : ''}`);
       list('#adJoined', d.joined, x => typeof x === 'string' ? x : `${x.name}｜${x.service || '（客服没填）'}`);
       list('#adThanks', d.thanks, x => `${x.name}｜${x.note || ''}`);
       list('#adNotices', d.notices, x => `${x.title}｜${x.body}`);
     };
     paint();
     dlg.querySelector('.fcX').onclick = () => dlg.close();
+    dlg.querySelector('#adBulkGo').onclick = () => {
+      const names = [...d.factories.map(x => x.name), ...allFactories().map(x => x.name)];
+      const r = F.parseFactoryText(dlg.querySelector('#adBulk').value, names), m = dlg.querySelector('#adBulkMsg');
+      d.factories.push(...r.list); if (r.list.length) { commit(); paint(); dlg.querySelector('#adBulk').value = ''; }
+      m.textContent = `加入 ${r.list.length} 家${r.errors.length ? `；${r.errors.length} 条没加：${r.errors.slice(0, 4).join('；')}${r.errors.length > 4 ? '…' : ''}` : ''}`; m.className = 'fcMsg' + (r.errors.length ? ' bad' : '');
+    };
     dlg.querySelector('#adWx').onchange = (e) => { d.ownerWechat = e.target.value.trim(); commit(); };
     dlg.querySelector('#adJGo').onclick = () => { const n = dlg.querySelector('#adJName').value.trim(); if (!n) return; d.joined.push({ name: n, service: dlg.querySelector('#adJSvc').value.trim() }); dlg.querySelector('#adJName').value = dlg.querySelector('#adJSvc').value = ''; commit(); paint(); };
     dlg.querySelector('#adTGo').onclick = () => { const n = dlg.querySelector('#adTName').value.trim(); if (!n) return; d.thanks.push({ name: n, note: dlg.querySelector('#adTNote').value.trim(), date: F.dayKey(Date.now()).slice(0, 7) }); dlg.querySelector('#adTName').value = dlg.querySelector('#adTNote').value = ''; commit(); paint(); };
     dlg.querySelector('#adNGo').onclick = () => { const t = dlg.querySelector('#adNTitle').value.trim(), b = dlg.querySelector('#adNBody').value.trim(); if (!t || !b) return; d.notices.push({ title: '📢 ' + t, body: b, date: F.dayKey(Date.now()) }); dlg.querySelector('#adNTitle').value = dlg.querySelector('#adNBody').value = ''; commit(); paint(); };
     dlg.querySelector('#adReset').onclick = () => { if (!confirm('丢掉本机草稿，回到线上的 sponsors.json？')) return; localStorage.removeItem(DRAFT_KEY); SPON = { ...SPON, ...(SPON._remote || {}) }; d = draft(); renderFactory(); renderMineSponsor(); renderNotices(); paint(); };
     dlg.querySelector('#adExport').onclick = () => {
-      const out = { ownerWechat: d.ownerWechat, admin: (SPON._remote && SPON._remote.admin) || SPON.admin || null, joined: d.joined, thanks: d.thanks, notices: d.notices };
+      const out = { ownerWechat: d.ownerWechat, factories: d.factories, admin: (SPON._remote && SPON._remote.admin) || SPON.admin || null, joined: d.joined, thanks: d.thanks, notices: d.notices };
       if (!out.admin) delete out.admin;
       download('sponsors.json', JSON.stringify(out, null, 2));
       dlg.querySelector('#adMsg').textContent = '已下载。替换 public/games/nunu-studio/sponsors.json 再上线才对所有人生效。';

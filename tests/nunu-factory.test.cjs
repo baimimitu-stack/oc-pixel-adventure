@@ -181,3 +181,20 @@ test('管理员：权重按「高」放宽，一票算 3 票', () => {
   assert.equal(r.weight, 3);
   assert.equal(F.weightOf({ ...adm, admin: false }, NOW).level, 'low', '不是管理员就回到按使用情况算');
 });
+
+test('批量解析娃厂：按行 / Tab / JSON；擅长体型、其他平台账号；去重、报错行', () => {
+  const text = '名字|标签|擅长体型|平台|简介|客服\n云朵朵工坊|做工细,发货快|2.5D、努努|闲鱼:yunduo;小红书:云朵朵|慢工出细活|客服 kf01\n栗子壳\t版型准\t努努\t淘宝:lizi\n丁\n云朵朵工坊|重复';
+  const r = F.parseFactoryText(text, []);
+  assert.equal(r.list.length, 2);
+  const a = r.list[0];
+  assert.equal(JSON.stringify(a.tags), '["做工细","发货快"]');
+  assert.equal(JSON.stringify(a.specialties), '["2.5D","努努"]');
+  assert.equal(JSON.stringify(a.platforms), '[{"platform":"闲鱼","account":"yunduo"},{"platform":"小红书","account":"云朵朵"}]');
+  assert.equal(a.service, '客服 kf01');
+  assert.equal(r.list[1].name, '栗子壳');
+  assert.equal(r.errors.length, 2, '名字太短 + 重名各一条');
+  const j = F.parseFactoryText('[{"name":"小熊工坊","specialties":["球豆体"],"platforms":[{"platform":"闲鱼","account":"xx"}]}]', ['云朵朵工坊']);
+  assert.equal(j.list.length, 1); assert.equal(j.list[0].platforms[0].account, 'xx');
+  assert.equal(F.parseFactoryText('[坏的', []).errors.length, 1);
+  assert.equal(F.parseFactoryText('云朵朵工坊|x', ['云朵朵工坊']).list.length, 0, '和已有的重名跳过');
+});

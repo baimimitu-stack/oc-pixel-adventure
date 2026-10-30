@@ -161,7 +161,40 @@
   }
   const isFolded = (post) => (post.flags || []).length >= FOLD_AT;
 
-  const api = { validateComment, validatePost, validateLike, hasContact, hasSensitive, hasCommercial, BOARDS, BIZ_CATS, PLATFORMS, isFolded, FOLD_AT, DAILY_LIMIT, HIGH_SCORE, LOW_SCORE, SPIKE_CAP, dayKey, weightOf, scoreOf, judgeVote, validateUpload, LEVEL_NAME };
+  /* ---------- 站长批量加娃厂 ----------
+   * 每行一家，字段用 | 或 ｜ 或 Tab 隔开（从 Excel 复制过来是 Tab）：
+   *   名字 | 标签 | 擅长体型 | 其他平台账号 | 简介 | 客服
+   * 标签、擅长体型用逗号 / 顿号隔开；其他平台账号写成「闲鱼:账号名;小红书:账号名」；客服可空（有客服 = 已入驻）。
+   * 也可以直接粘 JSON 数组：[{ "name", "tags", "specialties", "platforms":[{platform,account}], "note", "service" }]。 */
+  const splitList = (t, re) => String(t || '').split(re).map((x) => x.trim()).filter(Boolean);
+  function normFactory(o) {
+    const name = String(o.name || '').trim();
+    if (name.length < 2 || name.length > 16) return { ok: false, reason: '名字要 2 到 16 个字' };
+    const tags = (Array.isArray(o.tags) ? o.tags : splitList(o.tags, /[,，、/\s]+/)).map((x) => String(x).trim().slice(0, 8)).filter(Boolean).slice(0, 5);
+    const specialties = (Array.isArray(o.specialties) ? o.specialties : splitList(o.specialties, /[,，、/\s]+/)).map((x) => String(x).trim().slice(0, 12)).filter(Boolean).slice(0, 8);
+    let platforms = o.platforms;
+    if (!Array.isArray(platforms)) platforms = splitList(platforms, /[;；\n]+/).map((x) => { const i = x.search(/[:：]/); return i < 0 ? { platform: x, account: '' } : { platform: x.slice(0, i).trim(), account: x.slice(i + 1).trim() }; });
+    platforms = platforms.map((x) => ({ platform: String(x.platform || '').trim().slice(0, 8), account: String(x.account || '').trim().slice(0, 40) })).filter((x) => x.platform).slice(0, 6);
+    return { ok: true, f: { name, tags, specialties, platforms, note: String(o.note || '').trim().slice(0, 120), service: String(o.service || '').trim().slice(0, 40) } };
+  }
+  function parseFactoryText(text, existingNames = []) {
+    const t = String(text || '').trim(), list = [], errors = [], seen = new Set(existingNames);
+    const push = (o, label) => { const r = normFactory(o); if (!r.ok) { errors.push(`${label}：${r.reason}`); return; } if (seen.has(r.f.name)) { errors.push(`${label}：「${r.f.name}」已经有了，跳过`); return; } seen.add(r.f.name); list.push(r.f); };
+    if (t.startsWith('[')) {
+      let arr; try { arr = JSON.parse(t); } catch { return { list, errors: ['JSON 格式不对，读不出来。'] }; }
+      (Array.isArray(arr) ? arr : []).forEach((o, i) => push(o || {}, `第 ${i + 1} 项`));
+      return { list, errors };
+    }
+    t.split(/\r?\n/).forEach((line, i) => {
+      if (!line.trim()) return;
+      const c = line.split(/[|｜\t]/);
+      if (i === 0 && /^名字|^娃厂|^name/i.test(c[0].trim())) return;      // 表头
+      push({ name: c[0], tags: c[1], specialties: c[2], platforms: c[3], note: c[4], service: c[5] }, `第 ${i + 1} 行`);
+    });
+    return { list, errors };
+  }
+
+  const api = { parseFactoryText, validateComment, validatePost, validateLike, hasContact, hasSensitive, hasCommercial, BOARDS, BIZ_CATS, PLATFORMS, isFolded, FOLD_AT, DAILY_LIMIT, HIGH_SCORE, LOW_SCORE, SPIKE_CAP, dayKey, weightOf, scoreOf, judgeVote, validateUpload, LEVEL_NAME };
   root.NunuFactory = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window === 'undefined' ? globalThis : window);
