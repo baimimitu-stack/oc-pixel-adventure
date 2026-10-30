@@ -65,18 +65,23 @@
   }
   const saveStore = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch { toast('存储空间满了，这次没存上。请先下载备份、删掉一些图片帖。'); } };
   const readWorks = () => { try { const l = JSON.parse(localStorage.getItem('nunu-v4-design-projects')); return (Array.isArray(l) ? l.length : 0) + 1; } catch { return 1; } };
-  const accountNow = () => ({ ...store.account, works: readWorks(), admin: !!(USER && USER.isAdmin) });
+  const accountNow = () => ({ ...store.account, works: readWorks(), admin: !!(USER && USER.isAdmin), name: USER ? USER.name : '' });
   const guard = () => { if (USER) return true; toast('请先登录：到「我的」页 → 登录 / 注册。'); openLogin(); return false; };
   const adminFactories = () => (SPON.factories || []).map(f => ({ id: 'sf-' + f.name, name: f.name, tags: f.tags || [], note: f.note || '', specialties: f.specialties || [], platforms: f.platforms || [], base: 0, votes: 0, fromAdmin: true }));
-  const allFactories = () => [...FACTORIES, ...adminFactories(), ...store.uploads.filter(u => !(SPON.factories || []).some(f => f.name === u.name)).map(u => ({ id: u.id, name: u.name, tags: u.tags, note: u.note, owner: u.owner, base: 0, votes: 0, isNew: true }))];
+  const rawFactories = () => [...FACTORIES, ...adminFactories(), ...store.uploads.filter(u => !(SPON.factories || []).some(f => f.name === u.name)).map(u => ({ id: u.id, name: u.name, tags: u.tags, note: u.note, owner: u.owner, base: 0, votes: 0, isNew: true }))];
+  const claimOf = (f) => (SPON.claims || []).find(c => c.factory === f.name) || null;
+  const allFactories = () => rawFactories().map(f => { const c = claimOf(f); return c ? { ...f, claimedBy: c.user } : f; });
+  /* 认领（付费）：站长在管理台把「账号 ↔ 娃厂」绑上，这个账号走到哪（评论、帖子、私信）都带「✔ 认证」牌子 */
+  const badgeOf = (name) => { const c = (SPON.claims || []).find(x => x.user === name); return c ? `<span class="fcVerified" title="付费认领认证：站长确认过这个账号是「${esc(c.factory)}」的人。不代表质量，不影响评分和排序">✔ ${esc(c.factory)}（认证）</span>` : ''; };
+  const authorTag = (by, byName, lvl) => (by === store.account.id ? '我' : (lvl === 'low' ? '新账号' : '玩家')) + (byName ? badgeOf(byName) : '');
   /* 站长维护的名单（public/games/nunu-studio/sponsors.json）：认证的娃厂、微信号、感谢榜。谁打钱了就在这个文件里加一行。 */
-  let SPON = { ownerWechat: '', joined: [], thanks: [], notices: [], factories: [], admin: null };
+  let SPON = { ownerWechat: '', joined: [], thanks: [], notices: [], factories: [], claims: [], admin: null };
   const DRAFT_KEY = 'nunu-admin-draft';
   const applyDraft = () => { if (USER && USER.isAdmin) { try { const d = JSON.parse(localStorage.getItem(DRAFT_KEY)); if (d) SPON = { ...SPON, ...d }; } catch { /* 草稿坏了就不用 */ } } };
   /* 入驻 = 站长名单里有这家：joined 里每一项是娃厂名字（字符串），或 { name, service: '客服怎么联系' } */
-  const joinOf = (f) => { const own = (SPON.factories || []).find(x => x.name === f.name && (x.service || x.joined)); if (own) return { service: own.service || '' }; const hit = SPON.joined.find(v => (typeof v === 'string' ? v : (v.id || v.name)) === f.id || (typeof v === 'string' ? v : v.name) === f.name); return hit ? { service: typeof hit === 'string' ? '' : (hit.service || '') } : null; };
+  const joinOf = (f) => { const cl = (SPON.claims || []).find(c => c.factory === f.name); if (cl) return { service: cl.service || '' }; const own = (SPON.factories || []).find(x => x.name === f.name && (x.service || x.joined)); if (own) return { service: own.service || '' }; const hit = SPON.joined.find(v => (typeof v === 'string' ? v : (v.id || v.name)) === f.id || (typeof v === 'string' ? v : v.name) === f.name); return hit ? { service: typeof hit === 'string' ? '' : (hit.service || '') } : null; };
   const isVerified = (f) => !!joinOf(f);
-  const loadSpon = () => fetch('sponsors.json?t=' + Date.now()).then(r => r.ok ? r.json() : null).then(j => { if (j) { SPON = { ownerWechat: '', joined: [], thanks: [], notices: [], factories: [], admin: null, ...j }; SPON.joined = SPON.joined || j.verified || []; SPON._remote = JSON.parse(JSON.stringify(SPON)); applyDraft(); renderNotices(); renderFactory(); renderMineSponsor(); } }).catch(() => { /* 没有这个文件就当没人 */ });
+  const loadSpon = () => fetch('sponsors.json?t=' + Date.now()).then(r => r.ok ? r.json() : null).then(j => { if (j) { SPON = { ownerWechat: '', joined: [], thanks: [], notices: [], factories: [], claims: [], admin: null, ...j }; SPON.joined = SPON.joined || j.verified || []; SPON._remote = JSON.parse(JSON.stringify(SPON)); applyDraft(); renderNotices(); renderFactory(); renderMineSponsor(); } }).catch(() => { /* 没有这个文件就当没人 */ });
   const myVoteCount = () => store.records.filter(r => r.by === store.account.id).length;
   const todayLeft = () => F.DAILY_LIMIT - store.records.filter(r => r.by === store.account.id && r.day === F.dayKey(Date.now())).length;
 
@@ -96,7 +101,7 @@
     li.className = 'fcItem';
     li.innerHTML = `
       <span class="fcRank">${rank}</span>
-      <div class="fcName">${esc(f.name)}${isVerified(f) ? '<span class="fcVerified" title="已入驻：可直接联系客服。入驻不代表质量，不影响评分和排序">✔ 已入驻</span>' : ''}${f.tags.map(t => `<span class="fcTag${red ? '' : ' bad'}">${esc(t)}</span>`).join('')}</div>
+      <div class="fcName">${esc(f.name)}${isVerified(f) ? '<span class="fcVerified" title="付费认领认证：站长确认过身份并收费，不代表质量，不影响评分和排序">✔ 认证</span>' : ''}${f.tags.map(t => `<span class="fcTag${red ? '' : ' bad'}">${esc(t)}</span>`).join('')}</div>
       <div class="fcMeta">${s.votes} 人评过${s.mine ? ' · 我打了 ' + s.mine + ' 分' : ''}</div>
       <div class="fcScore">
         <span class="fcNum">${s.score.toFixed(1)}</span>
@@ -169,46 +174,48 @@
       <div class="fcBig"><span class="fcNum">${s.score == null ? '—' : s.score.toFixed(1)}</span><span class="fcStars">${s.score == null ? '还没人评' : stars(s.score)}</span><span class="fcMeta">${s.votes} 人评过${s.mine ? ' · 我最近打了 ' + s.mine + ' 分' : ''}</span></div>
       <h3>联系客服</h3>
       ${(() => { const j = joinOf(f); return j
-        ? `<p class="fcContact">✔ 这家已入驻。${j.service ? '客服：<b>' + esc(j.service) + '</b>' : '客服联系方式站长还没填。'}</p>`
-        : '<p class="fcContact">这家还没入驻，暂时没有官方客服。下面是大家的评价、Repo 和避雷。</p>'; })()}
-      <p class="fcContact"><small>平台只提供入口，不负责后续对接：下单、付款、售后、纠纷都由你和娃厂自己处理。入驻不代表质量，也不影响评分和排序。</small></p>
+        ? `<p class="fcContact">✔ 这家已被认领认证（付费），有官方客服。${j.service ? '客服：<b>' + esc(j.service) + '</b>' : '客服联系方式站长还没填。'}</p>`
+        : '<p class="fcContact">这家还没被认领，暂时没有官方客服。下面是大家的评价、Repo 和避雷。<button type="button" class="fcMini" id="fcClaim">🏷 我是这家的人，认领</button></p>'; })()}
+      <p class="fcContact"><small>平台只提供入口，不负责后续对接：下单、付款、售后、纠纷都由你和娃厂自己处理。认证是付费的，只代表站长确认过身份，不代表质量，也不影响评分和排序。</small></p>
       <h3>我的评分</h3>
       <div class="fcPick">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="fcStarBtn" data-star="${n * 2}" aria-label="${n * 2} 分">★</button>`).join('')}<span class="fcPickTxt">点星星：2 / 4 / 6 / 8 / 10 分</span></div>
       <p class="fcMsg" id="fcMsg"></p>
       <div class="fcRow"><button type="button" class="fcOk" disabled>提交评分</button></div>
       <p class="fcAcct">你的账号权重：<b>${esc(w.name)}</b> · 今天还能评 <b>${todayLeft()}</b> 家</p>
       <details><summary>评分规矩</summary>${RULES_HTML}</details>
-      <h3>评论区（<span id="fcCmtN">0</span>）</h3>
-      <ul class="fcCmts" id="fcCmts"></ul>
+      <h3>📜 评价时间线（<span id="fcTlN">0</span>）</h3>
+      <p class="fcNoteTxt" id="fcTlSum"></p>
+      <div class="fmCats" id="fcTlFilter"></div>
+      <div class="fcTimeline" id="fcTimeline"></div>
+      <h3>我也说一句</h3>
       <div class="fcCmtBox"><textarea id="fcCmtText" maxlength="100" rows="2" placeholder="说说你的体验（2–100 字，不放网址 / 联系方式）"></textarea><button type="button" class="fcOk" id="fcCmtGo">发表评论</button></div>
       <p class="fcMsg" id="fcCmtMsg"></p>
-      <h3>📦 相关 Repo（<span id="fcRepoN">0</span>）<button type="button" class="fcMini" data-newpost="repo">＋ 发 Repo</button></h3>
-      <ul class="fcPosts" id="fcRepoList"></ul>
-      <h3>⚠️ 相关避雷（<span id="fcAvoidN">0</span>）<button type="button" class="fcMini" data-newpost="avoid">＋ 发避雷</button></h3>
-      <ul class="fcPosts" id="fcAvoidList"></ul>`);
+      <div class="fcRow"><button type="button" class="fcMini" data-newpost="repo">＋ 发 Repo</button> <button type="button" class="fcMini" data-newpost="avoid">＋ 发避雷</button></div>`);
     const msg = dlg.querySelector('#fcMsg'), ok = dlg.querySelector('.fcOk');
-    const paintCmts = () => {
-      const list = store.comments.filter(c => c.f === f.id).sort((a, b) => b.ts - a.ts);
-      dlg.querySelector('#fcCmtN').textContent = list.length;
-      dlg.querySelector('#fcCmts').innerHTML = list.length ? list.map(c => `<li><b>${c.by === store.account.id ? '我' : (c.lvl === 'low' ? '新账号' : '玩家')}</b><span>${esc(c.text)}</span><small>${new Date(c.ts).toLocaleDateString()}</small></li>`).join('') : '<li class="fcEmpty">还没有评论，来说第一句。</li>';
+    let tlFilter = '';
+    const TL_NAME = { rate: '评分', comment: '评论', repo: 'Repo', avoid: '避雷', news: '业务动态' };
+    const paintTimeline = () => {
+      const tl = F.buildTimeline(f, { records: store.records, comments: store.comments, posts: allPosts() });
+      dlg.querySelector('#fcTlN').textContent = tl.total;
+      dlg.querySelector('#fcTlSum').textContent = tl.total ? `共 ${tl.total} 条：` + Object.entries(TL_NAME).filter(([k]) => tl.counts[k]).map(([k, n]) => `${n} ${tl.counts[k]}`).join(' · ') + '。按时间从新到旧，按月分组。' : '还没有任何评价。打分、评论、发 Repo、发避雷都会按时间排在这里。';
+      const fl = dlg.querySelector('#fcTlFilter');
+      fl.innerHTML = tl.total ? [['', '全部'], ...Object.entries(TL_NAME).filter(([k]) => tl.counts[k])].map(([k, n]) => `<button type="button" data-tl="${k}" class="${k === tlFilter ? 'on' : ''}">${n}</button>`).join('') : '';
+      fl.querySelectorAll('[data-tl]').forEach(btn => btn.onclick = () => { tlFilter = btn.dataset.tl; paintTimeline(); });
+      const body = dlg.querySelector('#fcTimeline');
+      const groups = tl.groups.map(g => ({ ...g, items: g.items.filter(i => !tlFilter || i.type === tlFilter) })).filter(g => g.items.length);
+      body.innerHTML = groups.length ? groups.map(g => `<section class="fcTlMonth"><h4>${g.label}</h4><ol>${g.items.map(i => `<li class="fcTl-${i.type}"><time>${new Date(i.ts).toLocaleDateString()}</time><span class="fcTlType">${TL_NAME[i.type]}${i.cat ? '·' + esc(BIZ_CAT_NAME[i.cat] || i.cat) : ''}</span><div class="fcTlBody"><b>${authorTag(i.by, i.byName, i.lvl)}</b>${i.type === 'rate' ? `打了 <b>${i.score}</b> 分${i.weight === 0 ? '（这一票先不计分）' : ''}` : i.type === 'comment' ? esc(i.text) : `<strong>${esc(i.title)}</strong><span>${esc(i.text.slice(0, 120))}${i.text.length > 120 ? '…' : ''}</span><small>👍 ${i.likes}</small>`}</div></li>`).join('')}</ol></section>`).join('') : '<p class="fcEmpty">这一类还没有。</p>';
     };
-    paintCmts();
-    const paintPosts = () => {
-      for (const [board, listId, nId] of [['repo', '#fcRepoList', '#fcRepoN'], ['avoid', '#fcAvoidList', '#fcAvoidN']]) {
-        const list = allPosts().filter(x => x.board === board && x.f === f.id && !F.isFolded(x)).sort((a, b) => (likeCount(b) - likeCount(a)) || (b.ts - a.ts));
-        dlg.querySelector(nId).textContent = list.length;
-        dlg.querySelector(listId).innerHTML = list.length ? list.map(x => `<li><b>${esc(x.title)}</b><span>${esc(x.body.slice(0, 80))}${x.body.length > 80 ? '…' : ''}</span><small>👍 ${likeCount(x)} · ${new Date(x.ts).toLocaleDateString()}</small></li>`).join('') : '<li class="fcEmpty">还没有。</li>';
-      }
-    };
-    paintPosts();
+    paintTimeline();
+    const claimBtn = dlg.querySelector('#fcClaim');
+    if (claimBtn) claimBtn.onclick = () => openClaim(f);
     dlg.querySelectorAll('[data-newpost]').forEach(b => b.onclick = () => { dlg.close(); setActive('forum'); openPost(b.dataset.newpost, f.id); });
     dlg.querySelector('#fcCmtGo').onclick = () => {
       if (!guard()) return;
       const m = dlg.querySelector('#fcCmtMsg');
       const res = F.validateComment(dlg.querySelector('#fcCmtText').value, { account: accountNow(), now: Date.now(), factory: f, comments: store.comments });
       if (!res.ok) { m.textContent = '✋ ' + res.reason; m.className = 'fcMsg bad'; return; }
-      store.comments.push({ id: 'c-' + Date.now().toString(36), f: f.id, by: store.account.id, text: res.clean, ts: Date.now(), day: F.dayKey(Date.now()), lvl: F.weightOf(accountNow()).level });
-      saveStore(); dlg.querySelector('#fcCmtText').value = ''; m.textContent = '评论发出去了。'; m.className = 'fcMsg'; paintCmts();
+      store.comments.push({ id: 'c-' + Date.now().toString(36), f: f.id, by: store.account.id, byName: USER ? USER.name : '', text: res.clean, ts: Date.now(), day: F.dayKey(Date.now()), lvl: F.weightOf(accountNow()).level });
+      saveStore(); dlg.querySelector('#fcCmtText').value = ''; m.textContent = '评论发出去了。'; m.className = 'fcMsg'; paintTimeline();
     };
     dlg.querySelector('.fcX').onclick = () => dlg.close();
     const paint = () => dlg.querySelectorAll('.fcStarBtn').forEach(b => b.classList.toggle('pick', Number(b.dataset.star) <= pick));
@@ -217,12 +224,23 @@
       if (!guard()) return;
       const res = F.judgeVote({ account: accountNow(), now: Date.now(), factory: f, score: pick, records: store.records, avg: s.score });
       if (!res.ok) { msg.textContent = '✋ ' + res.reason; msg.className = 'fcMsg bad'; return; }
-      store.records.push({ by: store.account.id, f: f.id, s: pick, w: res.weight, lvl: res.level, day: F.dayKey(Date.now()), ts: Date.now() });
+      store.records.push({ by: store.account.id, byName: USER ? USER.name : '', f: f.id, s: pick, w: res.weight, lvl: res.level, day: F.dayKey(Date.now()), ts: Date.now() });
       store.account.rated = (store.account.rated || 0) + 1;
       saveStore(); renderFactory();
       dlg.close();
       toast(`给「${f.name}」打了 ${pick} 分${res.note ? '。' + res.note : '，榜单已更新'}`);
     };
+  }
+
+  /* ---- 认领娃厂（付费）---- */
+  function openClaim(f) {
+    const dlg = dialogShell('fcClaimDlg', `
+      <header><h2>🏷 认领「${esc(f.name)}」</h2><button type="button" class="fcX" aria-label="关闭">✕</button></header>
+      <p class="fcNoteTxt">认领 = 把你的账号和这家娃厂绑在一起，得到「✔ 认证」牌子。<b>价格：${esc(SPON.joinPrice || '200 元')}</b>。</p>
+      <ol class="fcRules"><li>先在「我的」页注册 / 登录，记下你的<b>用户名</b>。</li><li>打赏站长 ${esc(SPON.joinPrice || '200 元')}（赞赏码在「我的」页），备注娃厂名字。</li><li>把<b>用户名 + 娃厂名字 + 客服联系方式</b>发给站长${SPON.ownerWechat ? '（微信：<b>' + esc(SPON.ownerWechat) + '</b>）' : '（站长微信见「我的」页）'}。</li><li>站长核对后在管理台把你的账号绑上。绑定后：你的账号走到哪里（评论、论坛帖子、私信）都带「✔ ${esc(f.name)}（认证）」牌子，娃厂页会显示你的官方客服，你还能在「娃厂业务」区发接单、活动、新品、招人合作。</li></ol>
+      <p class="fcNoteTxt"><b>说清楚：</b>认证是付费的，牌子旁边的提示也写着这一点；它只代表站长确认过身份，<b>不代表质量，也不影响评分和榜单排序</b>。认领后<b>不能给自己的娃厂打分、评论、发 Repo / 避雷</b>。平台不负责你和玩家之间后续的交易对接。</p>
+      <img src="donate.png?v=2" alt="站长赞赏码" class="mineDonate" onerror="this.style.display='none'">`);
+    dlg.querySelector('.fcX').onclick = () => dlg.close();
   }
 
   /* ---- 上传娃厂 ---- */
@@ -268,7 +286,7 @@
   let fmTab = 'avoid', fmCat = '';
   const allPosts = () => [...SEED_POSTS, ...store.posts];
   const likeCount = (p) => (p.seedLikes || 0) + (p.likes || []).length;
-  const ownerJoined = () => store.uploads.some(u => u.owner === store.account.id && joinOf(u));   // 我上传的娃厂已入驻 = 我是入驻方
+  const ownerJoined = () => (USER && (SPON.claims || []).some(c => c.user === USER.name)) || store.uploads.some(u => u.owner === store.account.id && joinOf(u));   // 我上传的娃厂已入驻 = 我是入驻方
   function renderForum() {
     const box = $('#fmList'); if (!box) return;
     const tabs = $('#fmTabs');
@@ -295,7 +313,7 @@
         <p>${folded ? '这个帖子被多人举报，先折叠了。' : esc(p.body)}</p>
         ${p.platform && !folded ? `<p class="fmMakerWarn">请在「${esc(p.platform)}」平台内下单，平台保障交易；不要私下转账、不要扫陌生二维码。</p>` : ''}
         ${p.img && !folded ? `<img class="fmImg" src="${p.img}" alt="">` : ''}
-        <small>${p.by === store.account.id ? '我发的' : (p.example ? '示例' : '玩家')} · ${new Date(p.ts).toLocaleDateString()}</small></div>
+        <small>${p.by === store.account.id ? '我发的' : (p.example ? '示例' : '玩家')}${p.byName ? badgeOf(p.byName) : ''} · ${new Date(p.ts).toLocaleDateString()}</small></div>
         <div class="fmOps"><button type="button" class="fmLike">👍 ${likeCount(p)}</button>${p.example || p.by === store.account.id ? '' : '<button type="button" class="fmDm">私信</button><button type="button" class="fmFlag">举报</button>'}</div>`;
       li.querySelector('.fmLike').onclick = () => {
         if (!guard()) return;
@@ -355,10 +373,10 @@
     };
     dlg.querySelector('.fcOk').onclick = () => {
       if (!guard()) return;
-      const res = F.validatePost({ board: dlg.querySelector('#fmBoard').value, cat: dlg.querySelector('#fmCat').value, platform: dlg.querySelector('#fmPlat').value, shop: dlg.querySelector('#fmShop').value, f: dlg.querySelector('#fmFac').value, title: dlg.querySelector('#fmTitle').value, body: dlg.querySelector('#fmText').value, img }, { account: accountNow(), now: Date.now(), posts: store.posts, joined: ownerJoined(), ownFactories: store.uploads.filter(u => u.owner === store.account.id).map(u => u.id) });
+      const res = F.validatePost({ board: dlg.querySelector('#fmBoard').value, cat: dlg.querySelector('#fmCat').value, platform: dlg.querySelector('#fmPlat').value, shop: dlg.querySelector('#fmShop').value, f: dlg.querySelector('#fmFac').value, title: dlg.querySelector('#fmTitle').value, body: dlg.querySelector('#fmText').value, img }, { account: accountNow(), now: Date.now(), posts: store.posts, joined: ownerJoined(), ownFactories: [...store.uploads.filter(u => u.owner === store.account.id).map(u => u.id), ...allFactories().filter(f => USER && f.claimedBy === USER.name).map(f => f.id)] });
       const m = dlg.querySelector('#fmMsg');
       if (!res.ok) { m.textContent = '✋ ' + res.reason; m.className = 'fcMsg bad'; return; }
-      store.posts.push({ id: 'p-' + Date.now().toString(36), ...res.clean, by: store.account.id, ts: Date.now(), day: F.dayKey(Date.now()), likes: [], flags: [] });
+      store.posts.push({ id: 'p-' + Date.now().toString(36), ...res.clean, by: store.account.id, byName: USER ? USER.name : '', ts: Date.now(), day: F.dayKey(Date.now()), likes: [], flags: [] });
       fmTab = res.clean.board; saveStore(); renderForum(); dlg.close(); toast('帖子发出去了。');
     };
   }
@@ -420,7 +438,7 @@
       <h3>社区公约</h3><p>大家都是<b>为爱发电</b>，不是客服。教程、经验、帖子的作者没有义务回复你：请不要反复私信、催更；<b>不回你是正常的</b>。请保持礼貌，先自己多探索（搜帖子、看说明书、动手试试），再提问，提问时写清楚你试过什么。</p>
       <h3>账号、备份</h3><p>现在没有服务器（没钱），账号、作品、评分、帖子、私信都只存在<b>你自己的浏览器</b>里：清缓存、换浏览器、换设备数据就没了，忘记密码也没法找回。请在「我的」页<b>及时「下载备份」</b>，换设备时「导入备份」。</p>
       <h3>账号权重</h3><p>用得越久、做的娃娃越多、评得越多，权重越高。新账号的票更轻，限制也更严；权重高了放宽。</p>
-      <h3>娃厂入驻（付费，目前 200 元）</h3><p>娃厂想入驻：打赏站长后，到「我的」页看站长微信，把<b>赞助码 + 娃厂名字 + 客服联系方式</b>发过去，站长确认后加上「✔ 已入驻」，玩家点进娃厂就能看到客服。<b>入驻只代表有官方客服入口，不代表质量，也不影响评分和榜单排序。</b>平台不负责下单、付款、售后、纠纷等后续对接。</p>
+      <h3>认领娃厂（付费，目前 200 元）</h3><p>娃厂想认领：在娃厂页点「🏷 我是这家的人，认领」，打赏站长后，把<b>用户名 + 娃厂名字 + 客服联系方式</b>发给站长，站长在管理台把你的账号和这家厂绑上。绑定后你的账号走到哪里（评论、论坛帖子、私信）都带「✔ 厂名（认证）」牌子，娃厂页显示官方客服，还能在「娃厂业务」区发帖。<b>认证是付费的，只代表站长确认过身份，不代表质量，也不影响评分和榜单排序。</b>认领后不能给自己的厂打分、评论、发 Repo / 避雷。平台不负责下单、付款、售后、纠纷等后续对接。</p>
       <h3>感谢榜</h3><p>打赏过站长的，经本人同意，名字会放进「我的」页的感谢榜。</p>
       <h3>数据在哪</h3><p>现在评分、评论、帖子都存在你自己的浏览器里，别人看不到，清掉浏览器数据就没了。联网同步上线后才会是大家共用的。</p>`);
     const dlg = $('#fcGuide'); dlg.querySelector('.fcX').onclick = () => dlg.close();
@@ -433,7 +451,7 @@
     if (box) box.innerHTML = `<h2>🤝 赞助与娃厂入驻</h2>
       <p class="mineTip">赞助 = 打赏站长，用来维护服务器和图纸。想让你的名字上感谢榜：打赏后告诉站长，经你同意就放上去。</p>
       <p class="mineTip"><b>娃厂想入驻</b>：打赏后加站长微信，发<b>赞助码 + 娃厂名字 + 客服联系方式</b>，站长确认后加「✔ 已入驻」，玩家点进娃厂就能直接联系客服。</p>
-      <p class="mineTip"><b>娃厂入驻认证：${esc(SPON.joinPrice || '200 元')}</b>（打赏时备注娃厂名字，再按上面的方式联系站长）。赞赏码：</p>
+      <p class="mineTip"><b>娃厂认领认证：${esc(SPON.joinPrice || '200 元')}</b>（认证牌子跟着账号走；打赏时备注娃厂名字，再把用户名发给站长）。赞赏码：</p>
       <img src="donate.png?v=2" alt="站长赞赏码" class="mineDonate" onerror="this.style.display='none'">
       <p class="mineTip">站长微信：<b>${SPON.ownerWechat ? esc(SPON.ownerWechat) : '（站长还没公布，公布后会写在这里）'}</b></p>
       <p class="mineTip" style="color:var(--ink-soft)">入驻只代表有官方客服入口，不代表质量，也不影响评分和排序；平台不负责后续对接（下单、付款、售后、纠纷）。</p>`;
@@ -543,8 +561,8 @@
    * 改的是「草稿」：存在本机、立刻在你自己的浏览器里生效；点「导出 sponsors.json」下载，替换项目里的文件并上线，所有人才能看到。 */
   function openAdmin() {
     if (!USER || !USER.isAdmin) { toast('只有管理员能打开管理台。'); return; }
-    const draft = () => { let d = null; try { d = JSON.parse(localStorage.getItem(DRAFT_KEY)); } catch { /* 无草稿 */ } return d || { ownerWechat: SPON.ownerWechat || '', factories: JSON.parse(JSON.stringify(SPON.factories || [])), joined: JSON.parse(JSON.stringify(SPON.joined || [])), thanks: JSON.parse(JSON.stringify(SPON.thanks || [])), notices: JSON.parse(JSON.stringify(SPON.notices || [])) }; };
-    let d = draft(); if (!d.factories) d.factories = [];
+    const draft = () => { let d = null; try { d = JSON.parse(localStorage.getItem(DRAFT_KEY)); } catch { /* 无草稿 */ } return d || { ownerWechat: SPON.ownerWechat || '', factories: JSON.parse(JSON.stringify(SPON.factories || [])), claims: JSON.parse(JSON.stringify(SPON.claims || [])), joined: JSON.parse(JSON.stringify(SPON.joined || [])), thanks: JSON.parse(JSON.stringify(SPON.thanks || [])), notices: JSON.parse(JSON.stringify(SPON.notices || [])) }; };
+    let d = draft(); if (!d.factories) d.factories = []; if (!d.claims) d.claims = [];
     const commit = () => { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); applyDraft(); renderFactory(); renderMineSponsor(); renderNotices(); };
     const dlg = dialogShell('adminDlg', `
       <header><h2>🛠 管理台</h2><button type="button" class="fcX" aria-label="关闭">✕</button></header>
@@ -554,6 +572,8 @@
       <p class="fcNoteTxt">每行一家，用 <code>|</code> 或 Tab 隔开（从 Excel 复制过来就是 Tab）：<br><code>名字 | 标签 | 擅长体型 | 其他平台账号 | 简介 | 客服</code><br>标签、擅长体型用逗号隔开；其他平台账号写成 <code>闲鱼:账号名;小红书:账号名</code>；客服填了就算「已入驻」。也可以直接粘 JSON 数组。</p>
       <textarea id="adBulk" rows="5" style="width:100%;box-sizing:border-box" placeholder="云朵朵工坊|做工细,发货快|2.5D,努努|闲鱼:yunduo;小红书:云朵朵|慢工出细活|客服 kf01"></textarea>
       <div class="adAdd"><button type="button" class="fcMini" id="adBulkGo">解析并加入</button><span id="adBulkMsg" class="fcMsg"></span></div>
+      <h3>认领绑定（收了钱的：账号 ↔ 娃厂，账号到处带「✔ 认证」）</h3><ul class="adList" id="adClaims"></ul>
+      <div class="adAdd"><input id="adCFac" list="adCFacList" placeholder="娃厂名字" maxlength="16"><datalist id="adCFacList">${[...new Set([...allFactories().map(x => x.name), ...d.factories.map(x => x.name)])].map(n => `<option value="${esc(n)}">`).join('')}</datalist><input id="adCUser" placeholder="对方的用户名" maxlength="16"><input id="adCSvc" placeholder="客服怎么联系（可空）" maxlength="40"><button type="button" class="fcMini" id="adCGo">绑定</button></div>
       <h3>站长录入的娃厂（<span id="adFacN">0</span>）</h3><ul class="adList" id="adFacs"></ul>
       <h3>入驻娃厂（有「✔ 已入驻」标记和官方客服）</h3><ul class="adList" id="adJoined"></ul>
       <div class="adAdd"><input id="adJName" placeholder="娃厂名字（要和上传时一致）" maxlength="16"><input id="adJSvc" placeholder="客服怎么联系" maxlength="40"><button type="button" class="fcMini" id="adJGo">加入驻</button></div>
@@ -570,6 +590,7 @@
     const paint = () => {
       dlg.querySelector('#adFacN').textContent = d.factories.length;
       list('#adFacs', d.factories, x => `${x.name}｜${(x.specialties || []).join('、')}｜${(x.platforms || []).map(p => p.platform + ':' + p.account).join(';')}${x.service ? '｜✔ 客服 ' + x.service : ''}`);
+      list('#adClaims', d.claims, x => `${x.factory}｜账号 ${x.user}${x.service ? '｜客服 ' + x.service : ''}`);
       list('#adJoined', d.joined, x => typeof x === 'string' ? x : `${x.name}｜${x.service || '（客服没填）'}`);
       list('#adThanks', d.thanks, x => `${x.name}｜${x.note || ''}`);
       list('#adNotices', d.notices, x => `${x.title}｜${x.body}`);
@@ -582,13 +603,20 @@
       d.factories.push(...r.list); if (r.list.length) { commit(); paint(); dlg.querySelector('#adBulk').value = ''; }
       m.textContent = `加入 ${r.list.length} 家${r.errors.length ? `；${r.errors.length} 条没加：${r.errors.slice(0, 4).join('；')}${r.errors.length > 4 ? '…' : ''}` : ''}`; m.className = 'fcMsg' + (r.errors.length ? ' bad' : '');
     };
+    dlg.querySelector('#adCGo').onclick = () => {
+      const fac = dlg.querySelector('#adCFac').value.trim(), user = dlg.querySelector('#adCUser').value.trim();
+      if (!fac || !user) return;
+      d.claims = d.claims.filter(c => c.factory !== fac);        // 一家厂只绑一个账号，重新绑定 = 换人
+      d.claims.push({ factory: fac, user, service: dlg.querySelector('#adCSvc').value.trim(), date: F.dayKey(Date.now()) });
+      dlg.querySelector('#adCFac').value = dlg.querySelector('#adCUser').value = dlg.querySelector('#adCSvc').value = ''; commit(); paint();
+    };
     dlg.querySelector('#adWx').onchange = (e) => { d.ownerWechat = e.target.value.trim(); commit(); };
     dlg.querySelector('#adJGo').onclick = () => { const n = dlg.querySelector('#adJName').value.trim(); if (!n) return; d.joined.push({ name: n, service: dlg.querySelector('#adJSvc').value.trim() }); dlg.querySelector('#adJName').value = dlg.querySelector('#adJSvc').value = ''; commit(); paint(); };
     dlg.querySelector('#adTGo').onclick = () => { const n = dlg.querySelector('#adTName').value.trim(); if (!n) return; d.thanks.push({ name: n, note: dlg.querySelector('#adTNote').value.trim(), date: F.dayKey(Date.now()).slice(0, 7) }); dlg.querySelector('#adTName').value = dlg.querySelector('#adTNote').value = ''; commit(); paint(); };
     dlg.querySelector('#adNGo').onclick = () => { const t = dlg.querySelector('#adNTitle').value.trim(), b = dlg.querySelector('#adNBody').value.trim(); if (!t || !b) return; d.notices.push({ title: '📢 ' + t, body: b, date: F.dayKey(Date.now()) }); dlg.querySelector('#adNTitle').value = dlg.querySelector('#adNBody').value = ''; commit(); paint(); };
     dlg.querySelector('#adReset').onclick = () => { if (!confirm('丢掉本机草稿，回到线上的 sponsors.json？')) return; localStorage.removeItem(DRAFT_KEY); SPON = { ...SPON, ...(SPON._remote || {}) }; d = draft(); renderFactory(); renderMineSponsor(); renderNotices(); paint(); };
     dlg.querySelector('#adExport').onclick = () => {
-      const out = { ownerWechat: d.ownerWechat, factories: d.factories, admin: (SPON._remote && SPON._remote.admin) || SPON.admin || null, joined: d.joined, thanks: d.thanks, notices: d.notices };
+      const out = { ownerWechat: d.ownerWechat, claims: d.claims, factories: d.factories, admin: (SPON._remote && SPON._remote.admin) || SPON.admin || null, joined: d.joined, thanks: d.thanks, notices: d.notices };
       if (!out.admin) delete out.admin;
       download('sponsors.json', JSON.stringify(out, null, 2));
       dlg.querySelector('#adMsg').textContent = '已下载。替换 public/games/nunu-studio/sponsors.json 再上线才对所有人生效。';

@@ -198,3 +198,33 @@ test('批量解析娃厂：按行 / Tab / JSON；擅长体型、其他平台账�
   assert.equal(F.parseFactoryText('[坏的', []).errors.length, 1);
   assert.equal(F.parseFactoryText('云朵朵工坊|x', ['云朵朵工坊']).list.length, 0, '和已有的重名跳过');
 });
+
+test('认领了娃厂的账号不能给自己认领的厂打分 / 评论', () => {
+  const me = { id: 'u-claim', name: '厂主', created: NOW - 40 * DAY, works: 6, rated: 40 };
+  const f = fac('f1', { claimedBy: '厂主' });
+  assert.equal(F.judgeVote({ account: me, now: NOW, factory: f, score: 10, records: [] }).ok, false);
+  assert.equal(F.validateComment('我家的娃做得特别好', { account: me, now: NOW, factory: f, comments: [] }).ok, false);
+  assert.equal(F.judgeVote({ account: me, now: NOW, factory: fac('f2'), score: 6, records: [] }).ok, true, '别家照常');
+  assert.equal(F.judgeVote({ account: { ...me, name: '路人' }, now: NOW, factory: f, score: 6, records: [] }).ok, true, '别的账号照常');
+});
+
+test('一家娃厂的评价时间线：评分 / 评论 / Repo / 避雷 / 业务动态按时间从新到旧、按月分组，折叠的帖子不进', () => {
+  const T = (y, m, d) => new Date(y, m - 1, d, 12).getTime();
+  const f = { id: 'f1' };
+  const data = {
+    records: [{ f: 'f1', s: 8, w: 1, by: 'a', ts: T(2026, 10, 5) }, { f: 'other', s: 2, w: 1, by: 'a', ts: T(2026, 10, 6) }],
+    comments: [{ f: 'f1', text: '发货很快', by: 'b', ts: T(2026, 9, 20) }],
+    posts: [
+      { id: 'p1', f: 'f1', board: 'repo', title: '收货报告', body: '做工不错', by: 'c', ts: T(2026, 10, 20), likes: ['x'], flags: [] },
+      { id: 'p2', f: 'f1', board: 'avoid', title: '被折叠的', body: '内容内容内容内容', by: 'd', ts: T(2026, 10, 21), likes: [], flags: ['1', '2', '3'] },
+      { id: 'p3', f: 'f1', board: 'biz', cat: 'event', title: '周年活动', body: '活动内容内容', by: 'e', ts: T(2026, 8, 1), likes: [], flags: [] },
+      { id: 'p4', f: 'f1', board: 'tips', title: '经验帖', body: '经验经验经验经验', by: 'g', ts: T(2026, 10, 22), likes: [], flags: [] },
+    ],
+  };
+  const tl = F.buildTimeline(f, data);
+  assert.equal(tl.total, 4, '别家的评分、折叠帖、经验帖都不算');
+  assert.equal(JSON.stringify(tl.groups.map((g) => g.key)), '["2026-10","2026-09","2026-08"]');
+  assert.equal(JSON.stringify(tl.groups[0].items.map((i) => i.type)), '["repo","rate"]', '同一个月里新的在上');
+  assert.equal(tl.groups[0].label, '2026 年 10 月');
+  assert.equal(tl.counts.news, 1); assert.equal(tl.groups[0].items[0].likes, 1);
+});

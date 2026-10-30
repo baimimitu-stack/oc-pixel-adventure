@@ -50,7 +50,7 @@
     const today = dayKey(now);
     const mineToday = records.filter((r) => r.by === account.id && r.day === today);
     const w = weightOf(account, now);
-    if (factory.owner && factory.owner === account.id) return { ok: false, reason: '不能给自己上传的娃厂打分。' };
+    if ((factory.owner && factory.owner === account.id) || (factory.claimedBy && factory.claimedBy === account.name)) return { ok: false, reason: '不能给自己上传 / 认领的娃厂打分。' };
     if (!Number.isFinite(score) || score < 1 || score > 10) return { ok: false, reason: '分数不对。' };
     if (mineToday.some((r) => r.f === factory.id)) return { ok: false, reason: '这家今天已经评过了，明天再来改。' };
     if (mineToday.length >= DAILY_LIMIT) return { ok: false, reason: `今天的 ${DAILY_LIMIT} 次评价用完了，明天再来。` };
@@ -104,7 +104,7 @@
     if (t.length < 2 || t.length > 100) return { ok: false, reason: '评论要 2 到 100 个字。' };
     if (hasContact(t)) return { ok: false, reason: '评论里不要放网址 / 联系方式 / 引流的话。' };
     if (hasSensitive(t)) return { ok: false, reason: '涉及敏感话题的内容不能发布。' };
-    if (ctx.factory.owner && ctx.factory.owner === ctx.account.id) return { ok: false, reason: '不能评论自己上传的娃厂。' };
+    if ((ctx.factory.owner && ctx.factory.owner === ctx.account.id) || (ctx.factory.claimedBy && ctx.factory.claimedBy === ctx.account.name)) return { ok: false, reason: '不能评论自己上传 / 认领的娃厂。' };
     const mine = (ctx.comments || []).filter((c) => c.by === ctx.account.id && c.day === today);
     if (mine.some((c) => c.f === ctx.factory.id)) return { ok: false, reason: '这家今天已经评论过了，明天再来。' };
     const cap = lim(ctx.account, now, 3, 5);
@@ -194,7 +194,33 @@
     return { list, errors };
   }
 
-  const api = { parseFactoryText, validateComment, validatePost, validateLike, hasContact, hasSensitive, hasCommercial, BOARDS, BIZ_CATS, PLATFORMS, isFolded, FOLD_AT, DAILY_LIMIT, HIGH_SCORE, LOW_SCORE, SPIKE_CAP, dayKey, weightOf, scoreOf, judgeVote, validateUpload, LEVEL_NAME };
+  /* ---------- 一家娃厂的评价时间线 ----------
+   * 评分、评论、Repo、避雷、这家自己发的业务动态，全部按时间排成一条线，按月分组（新的在上）。
+   * 不再是「评论一块、Repo 一块、避雷一块」零零散散。被 3 人举报折叠的帖子不进时间线。 */
+  const monthKey = (ts) => dayKey(ts).slice(0, 7);
+  function buildTimeline(factory, data) {
+    const items = [];
+    for (const r of data.records || []) if (r.f === factory.id) items.push({ ts: r.ts, type: 'rate', by: r.by, byName: r.byName || '', lvl: r.lvl, score: r.s, weight: r.w });
+    for (const c of data.comments || []) if (c.f === factory.id) items.push({ ts: c.ts, type: 'comment', by: c.by, byName: c.byName || '', lvl: c.lvl, text: c.text });
+    for (const p of data.posts || []) {
+      if (p.f !== factory.id || isFolded(p)) continue;
+      const type = p.board === 'repo' ? 'repo' : p.board === 'avoid' ? 'avoid' : p.board === 'biz' ? 'news' : null;
+      if (type) items.push({ ts: p.ts, type, by: p.by, byName: p.byName || '', title: p.title, text: p.body, likes: (p.seedLikes || 0) + (p.likes || []).length, cat: p.cat || '', example: !!p.example });
+    }
+    items.sort((a, b) => b.ts - a.ts);
+    const counts = { rate: 0, comment: 0, repo: 0, avoid: 0, news: 0 };
+    items.forEach((i) => { counts[i.type]++; });
+    const groups = [];
+    for (const it of items) {
+      const k = monthKey(it.ts);
+      let g = groups[groups.length - 1];
+      if (!g || g.key !== k) { g = { key: k, label: `${k.slice(0, 4)} 年 ${Number(k.slice(5))} 月`, items: [] }; groups.push(g); }
+      g.items.push(it);
+    }
+    return { total: items.length, counts, groups };
+  }
+
+  const api = { buildTimeline, parseFactoryText, validateComment, validatePost, validateLike, hasContact, hasSensitive, hasCommercial, BOARDS, BIZ_CATS, PLATFORMS, isFolded, FOLD_AT, DAILY_LIMIT, HIGH_SCORE, LOW_SCORE, SPIKE_CAP, dayKey, weightOf, scoreOf, judgeVote, validateUpload, LEVEL_NAME };
   root.NunuFactory = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window === 'undefined' ? globalThis : window);
