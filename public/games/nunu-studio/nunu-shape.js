@@ -234,7 +234,7 @@ function offsetConvex(poly, d, miterLimit = 2.2) {
   return out;
 }
 
-const api = { emptyBitmap, distanceTo, dilate, erode, areaOf, traceContours, polygonArea, simplifyLoop, smoothLoop, outerContours, loopBox, rasterizePolygon, offsetPolygon, offsetConvex };
+const api = { emptyBitmap, distanceTo, dilate, erode, areaOf, traceContours, polygonArea, dp, simplifyLoop, smoothLoop, outerContours, loopBox, rasterizePolygon, offsetPolygon, offsetConvex };
 root.NunuShape = api;
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window === 'undefined' ? globalThis : window);

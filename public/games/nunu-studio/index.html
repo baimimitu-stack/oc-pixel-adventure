@@ -1,15 +1,16 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
+  <link rel="icon" href="data:,">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>努努赛博定制台 · 图样与裸娃实时联动</title>
+<title>努努工作台 · 做一只自己的努努</title>
 <meta name="description" content="用公开的努努图纸：在图样上画脸，在 3D 裸娃上画发片，两边实时互相投射；自动防止画错地方和备料错误。">
-<link rel="stylesheet" href="style.css?v=21">
+<link rel="stylesheet" href="style.css?v=80">
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="/" aria-label="回到游戏盒子"><span>✿</span><div>努努赛博定制台<small>NUNU CYBER ATELIER</small></div></a>
+  <a class="brand" href="/" aria-label="回到游戏盒子"><span>🧸</span><div>努努工作台<small>NUNU PIXEL ATELIER</small></div></a>
   <div class="project">
     <input id="projectName" aria-label="作品名称" maxlength="40">
     <span id="saveStatus">保存在此浏览器</span>
@@ -29,82 +30,190 @@
   </div>
 </header>
 
-<section class="toolbar" aria-label="画笔和守卫">
-  <div class="group" role="group" aria-label="画在哪一层">
-    <button type="button" data-layer="face" class="seg on" title="眼睛、嘴：只能画在脸片的脸窗里">脸</button>
-    <button type="button" data-layer="skin" class="seg" title="腮红、花纹：画在肤色布的裁片上">彩绘</button>
-    <button type="button" data-layer="hair" class="seg" title="后发：给头顶发、后脑涂色（缝上去）；前发：画在脸片的额头上（贴上去）">发片</button>
-  </div>
-  <div class="group" id="hairTargets" role="group" aria-label="发片画在哪" hidden>
-    <small class="lab">发片画在</small>
-    <button type="button" data-target="front" class="seg on" title="前发：脑袋上另起的一层，贴在脸前面">前发</button>
-    <button type="button" data-target="back" class="seg" title="后发：另起的一层，贴在后脑上">后发</button>
-    <button type="button" data-target="top" class="seg" title="上面：翘出脑袋的发片，黏在头顶">上面</button>
-    <button type="button" data-target="base" class="seg" title="给头顶发、后脑这两片发片布涂底色">底布</button>
-  </div>
-  <div class="group" role="group" aria-label="工具">
-    <button type="button" id="toolPen" class="seg on">✎ 画笔</button>
-    <button type="button" id="toolEraser" class="seg">橡皮擦</button>
-  </div>
-  <div class="group swatch-group"><div id="swatches" class="swatches"></div><input type="color" id="customColor" aria-label="自定义颜色" value="#4b3939"></div>
-  <label class="size">笔 <input type="range" id="brushSize" min="0.5" max="30" step="0.5" value="3"><output id="brushOut">3 mm</output></label>
-  <div class="group toggles">
-    <label><input type="checkbox" id="mirror" checked> 左右对称</label>
-    <label title="离缝线太近的地方不让画"><input type="checkbox" id="seamGuard" checked> 接缝保护</label>
-    <label><input type="checkbox" id="showZones"> 显示不能画的地方</label>
-    <label><input type="checkbox" id="showGuides" checked> 眼嘴参考框</label>
-    <label><input type="checkbox" id="showSeams" checked> 缝线 / 记号</label>
-    <label title="切到脸 / 发片 / 彩绘层时，图样自动对准要画的那一块"><input type="checkbox" id="autoFocus" checked> 自动聚焦</label>
-  </div>
-  <div class="group">
-    <button type="button" id="undo" title="撤销">↶</button>
-    <button type="button" id="redo" title="重做">↷</button>
-  </div>
-  <p id="layerHint" class="layer-hint" role="status"></p>
-</section>
+<div class="pages" id="pages">
 
-<main class="workspace">
-  <section class="panel" id="sheetPanel">
-    <div class="panel-head">
-      <div><span class="number">01</span><b>图样</b><small>左边是图纸，右边是发片画板；画一笔，3D 立刻跟着变</small></div>
-      <div class="mini"><button type="button" id="zoomFit" title="看全部">全局</button><button type="button" id="viewPattern" title="只看图纸">图纸</button><button type="button" id="viewFace" title="只看脸片，画脸用">脸</button><button type="button" id="viewHair" title="只看发片画板，画发片用">发片</button><button type="button" id="handTool" title="手形：按住左键拖动画布（快捷键 H；空白处直接拖也行）">✋ 移动</button><button type="button" id="zoomOut" aria-label="缩小">−</button><button type="button" id="zoomIn" aria-label="放大">＋</button></div>
-    </div>
-    <div class="stage"><canvas id="sheet" aria-label="图样：每一片裁片，可以直接在上面画"></canvas></div>
-    <p class="caption">实线是缝线，虚线是裁剪线（含缝份），蓝色虚线是脸窗和眼嘴参考框。点一片选中，它在 3D 上会亮起来；空白处拖动或右键拖动平移，滚轮缩放，Shift+滚轮左右移动；上面的按钮可以只看脸、只看发片、看全局。</p>
-  </section>
-  <section class="panel" id="modelPanel">
-    <div class="panel-head">
-      <div><span class="number">02</span><b>3D 裸娃</b><small>在娃娃身上画，图样立刻跟着变</small></div>
-      <div class="mini">
-        <button type="button" id="modePaint" class="on">画</button><button type="button" id="modeRotate">转</button>
-        <button type="button" data-view="0">正</button><button type="button" data-view="1.5708">侧</button><button type="button" data-view="3.1416">背</button>
+  <!-- ========== 制作娃娃 ========== -->
+  <div class="page page-make" data-page="make">
+    <section class="toolbar" aria-label="画笔和守卫" hidden>
+      <div class="group" role="group" aria-label="画在哪一层">
+        <button type="button" data-layer="face" class="seg on" title="眼睛、嘴：只能画在脸片的脸窗里">脸</button>
+        <button type="button" data-layer="skin" class="seg" title="腮红、花纹：画在肤色布的裁片上">彩绘</button>
+        <button type="button" data-layer="hair" class="seg" title="后发：给头顶发、后脑涂色（缝上去）；前发：画在脸片的额头上（贴上去）">发片</button>
       </div>
-    </div>
-    <div class="stage"><canvas id="model" aria-label="3D 娃娃，可以直接在上面画"></canvas><div id="modelError" hidden>这个浏览器没有开 3D，打开 WebGL 就能看到娃娃。图样这边照常能用。</div></div>
-    <p class="caption">「画」模式下左键画，右键拖动转；「转」模式下左键拖动转、点一下选中那一片；滚轮缩放。没有裁片盖着的地方（裸露的娃娃）画不上去。</p>
-  </section>
-</main>
-
-<section class="dock" aria-label="图纸、备料、检查、设置">
-  <div class="tabs" role="tablist">
-    <button type="button" role="tab" data-tab="pattern" class="on">图纸</button>
-    <button type="button" role="tab" data-tab="body">体子</button>
-    <button type="button" role="tab" data-tab="bom">备料 <i id="bomBadge"></i></button>
-    <button type="button" role="tab" data-tab="check">检查 <i id="checkBadge"></i></button>
-    <button type="button" role="tab" data-tab="setup">设置</button>
+      <div class="group" id="hairTargets" role="group" aria-label="发片画在哪" hidden>
+        <small class="lab">发片画在</small>
+        <button type="button" data-target="front" class="seg on" title="前发：脑袋上另起的一层，贴在脸前面">前发</button>
+        <button type="button" data-target="back" class="seg" title="后发：另起的一层，贴在后脑上">后发</button>
+        <button type="button" data-target="top" class="seg" title="上面：翘出脑袋的发片，黏在头顶">上面</button>
+        <button type="button" data-target="base" class="seg" title="给头顶发、后脑这两片发片布涂底色">底布</button>
+        <button type="button" data-target="accessory" class="seg" title="编辑长发、辫子和大发片的独立裁片">外挂发片</button>
+      </div>
+      <div class="group" role="group" aria-label="工具">
+        <button type="button" id="toolPen" class="seg on">✎ 画笔</button>
+        <button type="button" id="toolEraser" class="seg">橡皮擦</button>
+      </div>
+      <div class="group swatch-group"><div id="swatches" class="swatches"></div><input type="color" id="customColor" aria-label="自定义颜色" value="#4b3939"></div>
+      <label class="size">笔 <input type="range" id="brushSize" min="0.5" max="30" step="0.5" value="3"><output id="brushOut">3 mm</output></label>
+      <div class="group toggles">
+        <label><input type="checkbox" id="mirror" checked> 左右对称</label>
+        <label title="离缝线太近的地方不让画"><input type="checkbox" id="seamGuard" checked> 接缝保护</label>
+        <label><input type="checkbox" id="showZones"> 显示不能画的地方</label>
+        <label><input type="checkbox" id="showGuides" checked> 眼嘴参考框</label>
+        <label><input type="checkbox" id="showSeams" checked> 缝线 / 记号</label>
+        <label title="切到脸 / 发片 / 彩绘层时，图样自动对准要画的那一块"><input type="checkbox" id="autoFocus" checked> 自动聚焦</label>
+      </div>
+      <div class="group">
+        <button type="button" id="undo" title="撤销">↶</button>
+        <button type="button" id="redo" title="重做">↷</button>
+      </div>
+      <p id="layerHint" class="layer-hint" role="status"></p>
+    </section>
+    <section id="layerDesigner" hidden aria-label="四层制作台"></section>
   </div>
-  <div id="dockBody" class="dock-body"></div>
-</section>
+
+  <!-- ========== 图纸娃娃 ========== -->
+  <div class="page page-pattern" data-page="pattern" hidden>
+    <main class="workspace">
+      <section class="panel" id="sheetPanel">
+        <div class="panel-head">
+          <div><span class="number">01</span><b>图样</b><small>左边是图纸，右边是发片画板；画一笔，3D 立刻跟着变</small></div>
+          <div class="mini"><button type="button" id="zoomFit" title="看全部">全局</button><button type="button" id="viewPattern" title="只看图纸">图纸</button><button type="button" id="viewFace" title="只看脸片，画脸用">脸</button><button type="button" id="viewHair" title="只看发片画板，画发片用">发片</button><button type="button" id="handTool" title="手形：按住左键拖动画布（快捷键 H；空白处直接拖也行）">✋ 移动</button><button type="button" id="zoomOut" aria-label="缩小">−</button><button type="button" id="zoomIn" aria-label="放大">＋</button></div>
+        </div>
+        <div class="stage"><canvas id="sheet" aria-label="图样：每一片裁片，可以直接在上面画"></canvas></div>
+        <p class="caption">实线是缝线，虚线是裁剪线（含缝份），蓝色虚线是脸窗和眼嘴参考框。点一片选中，它在 3D 上会亮起来；空白处拖动或右键拖动平移，滚轮缩放，Shift+滚轮左右移动。</p>
+      </section>
+      <section class="panel" id="modelPanel">
+        <div class="panel-head">
+          <div><span class="number">02</span><b>3D 裸娃</b><small>在娃娃身上画，图样立刻跟着变</small></div>
+          <div class="mini">
+            <button type="button" id="modePaint" class="on">画</button><button type="button" id="modeRotate">转</button>
+            <button type="button" id="returnDoll" hidden>返回努努绘画</button>
+            <button type="button" data-view="0">正</button><button type="button" data-view="1.5708">侧</button><button type="button" data-view="3.1416">背</button>
+          </div>
+        </div>
+        <div class="stage"><canvas id="model" aria-label="3D 娃娃，可以直接在上面画"></canvas><div id="modelError" hidden>这个浏览器没有开 3D，打开 WebGL 就能看到娃娃。图样这边照常能用。</div></div>
+        <p class="caption">「画」模式下左键画，右键拖动转；「转」模式下左键拖动转、点一下选中那一片；滚轮缩放。</p>
+      </section>
+    </main>
+
+    <section class="dock" aria-label="图纸、备料、检查、设置">
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" data-tab="pattern" class="on">图纸</button>
+        <button type="button" role="tab" data-tab="body">自创体型</button>
+        <button type="button" role="tab" data-tab="mesh">旧版粗模</button>
+        <button type="button" role="tab" data-tab="bom">备料 <i id="bomBadge"></i></button>
+        <button type="button" role="tab" data-tab="check">检查 <i id="checkBadge"></i></button>
+        <button type="button" role="tab" data-tab="setup">设置</button>
+      </div>
+      <div id="dockBody" class="dock-body"></div>
+    </section>
+  </div>
+
+  <!-- ========== 娃厂 ========== -->
+  <div class="page page-factory" data-page="factory" hidden>
+    <section class="fc">
+      <header class="fcHead">
+        <button type="button" id="fcUpload" class="fcUp">＋ 上传娃厂</button>
+        <button type="button" id="fcHelp" class="fcUp fcUp2">📖 说明书</button>
+        <h1>🏭 娃厂红黑榜</h1>
+        <p class="fcSub">大家一起给娃厂打分：好厂上红榜，坑厂上黑榜。<span class="fcBeta">示例数据 · 联网同步即将上线</span></p>
+      </header>
+      <div class="fcNotice" id="fcNotice"></div>
+      <div class="fcCols">
+        <section class="fcCol fcRed">
+          <h2>🌹 红榜</h2>
+          <ol id="fcRedList" class="fcList"></ol>
+        </section>
+        <section class="fcCol fcBlack">
+          <h2>🖤 黑榜</h2>
+          <ol id="fcBlackList" class="fcList"></ol>
+        </section>
+      </div>
+      <section class="fcAll">
+        <h2>📋 全部娃厂（<span id="fcAllCount">0</span>）<small id="fcLeft"></small></h2>
+        <ul id="fcAllList" class="fcAllList"></ul>
+      </section>
+      <section class="fcThanks" id="fcThanks" hidden></section>
+      <p class="fcNote">打分只代表玩家体验，按综合评分排序。点进娃厂：评价、相关 Repo、相关避雷都在里面；已入驻的娃厂能直接联系客服。平台只提供入口，不负责后续对接。</p>
+    </section>
+  </div>
+
+  <!-- ========== 论坛 ========== -->
+  <div class="page page-forum" data-page="forum" hidden>
+    <section class="fm">
+      <header class="fcHead">
+        <button type="button" id="fmNew" class="fcUp">＋ 发帖</button>
+        <button type="button" id="fmHelp" class="fcUp fcUp2">📖 说明书</button>
+        <h1>💬 娃厂论坛</h1>
+        <p class="fcSub">避雷帖提醒大家少踩坑，Repo 帖晒收货报告。点赞多的 Repo 上榜。<span class="fcBeta">本机数据 · 联网同步即将上线</span></p>
+      </header>
+      <div class="fcNotice" id="fmNotice"></div>
+      <div class="fmTabs" id="fmTabs"></div>
+      <p class="fmTip" id="fmTip"></p>
+      <div class="fmCats" id="fmCats" hidden></div>
+      <ol id="fmList" class="fmList"></ol>
+    </section>
+  </div>
+
+  <!-- ========== 我的 ========== -->
+  <div class="page page-mine" data-page="mine" hidden>
+    <section class="mine">
+      <div class="mineCard" id="mineAccount"></div>
+      <div class="mineCard">
+        <h2>✉️ 私信 <button type="button" id="mineDm" class="fcMini">打开私信</button></h2>
+        <p class="mineTip">用来做短期的交流过渡。<b>我们不是中介平台，不担保任何交易，小心上单被骗。</b>现在消息只存在你这台浏览器里，联网后才能真正收发。</p>
+      </div>
+      <div class="mineCard">
+        <h2>🧸 我的娃娃图纸</h2>
+        <div id="mineProjects" class="mineProjects"></div>
+      </div>
+      <div class="mineRow">
+        <div class="mineCard">
+          <h2>🏅 光荣榜</h2>
+          <ul id="mineBadges" class="mineBadges"></ul>
+        </div>
+        <div class="mineCard">
+          <h2>💛 我的赞助码</h2>
+          <p class="mineCode" id="mineCode">…</p>
+          <button id="mineCopy" type="button">复制赞助码</button>
+          <p class="mineTip">赞助码用来支持服务器和图纸维护。把它发给想赞助你的人，对方输入就能给你打 call。</p>
+        </div>
+      </div>
+      <div class="mineRow">
+        <div class="mineCard" id="mineSponsor"></div>
+        <div class="mineCard"><h2>🌸 感谢榜</h2><ul id="thanksList" class="thanksList"></ul></div>
+      </div>
+    </section>
+  </div>
+
+</div>
+
+<nav class="bottombar" aria-label="主导航">
+  <button type="button" class="bnav on" data-goto="make"><span class="bnav-ico">🧸</span><span class="bnav-txt">制作娃娃</span></button>
+  <button type="button" class="bnav" data-goto="pattern"><span class="bnav-ico">📐</span><span class="bnav-txt">图纸娃娃</span></button>
+  <button type="button" class="bnav" data-goto="factory"><span class="bnav-ico">🏭</span><span class="bnav-txt">娃厂</span></button>
+  <button type="button" class="bnav" data-goto="forum"><span class="bnav-ico">💬</span><span class="bnav-txt">论坛</span></button>
+  <button type="button" class="bnav" data-goto="mine"><span class="bnav-ico">👤</span><span class="bnav-txt">我的</span></button>
+</nav>
 
 <input type="file" id="importFile" accept="image/*" hidden>
+<input type="file" id="meshFile" accept=".obj,text/plain" hidden>
 <div id="toast" role="status" aria-live="polite"></div>
 <script src="../ice-cream-latte/three.min.js"></script>
-<script src="nunu-shape.js?v=21"></script>
-<script src="pattern-data.js?v=21"></script>
-<script src="nunu-core.js?v=21"></script>
-<script src="nunu-body.js?v=21"></script>
-<script src="model3d.js?v=21"></script>
-<script src="sheet.js?v=21"></script>
-<script src="app.js?v=21"></script>
+<script src="nunu-shape.js?v=80"></script>
+<script src="pattern-data.js?v=80"></script>
+<script src="nunu-core.js?v=80"></script>
+<script src="nunu-body.js?v=80"></script>
+<script src="nunu-colorimport.js?v=80"></script>
+<script src="nunu-25d.js?v=80"></script>
+<script src="nunu-design.js?v=80"></script>
+<script src="nunu-mesh.js?v=80"></script>
+<script src="nunu-hair.js?v=80"></script>
+<script src="model3d.js?v=80"></script>
+<script src="sheet.js?v=80"></script>
+<script src="app.js?v=80"></script>
+<script src="nunu-auth.js?v=80"></script>
+<script src="nunu-factory.js?v=80"></script>
+<script src="nunu-nav.js?v=80"></script>
 </body>
 </html>

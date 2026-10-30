@@ -151,6 +151,22 @@ function create(canvas, opts = {}) {
       ctx.fillText('省道', (dt.left[0][0] + dt.right[0][0]) / 2, dt.left[0][1] - 4 * z);
       ctx.restore();
     }
+    // 粗模裁片：每条缝合边描成各自的颜色（同色 = 缝在一起），边上标缝号
+    for (const e of p.seamEdges || []) {
+      ctx.save();
+      ctx.lineWidth = 2.8 * z; ctx.strokeStyle = e.color; ctx.lineJoin = 'round';
+      ctx.beginPath(); e.pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke();
+      const mid = e.pts[Math.floor(e.pts.length / 2)];
+      ctx.font = `700 ${Math.max(9, Math.min(13, 10 * z * 1.1))}px system-ui, sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = e.color;
+      ctx.lineWidth = 3 * z; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.strokeText(e.label, mid[0], mid[1]); ctx.fillText(e.label, mid[0], mid[1]);
+      ctx.restore();
+    }
+    for (const m of p.mounts || []) {
+      ctx.save(); ctx.strokeStyle = ctx.fillStyle = '#227e88'; ctx.lineWidth = 1.5 * z;
+      ctx.beginPath(); ctx.arc(m.x, m.y, 5, 0, Math.PI * 2); ctx.stroke();
+      ctx.font = `${12 * z}px sans-serif`; ctx.fillText(m.label, m.x + 7, m.y - 7); ctx.restore();
+    }
     label(p, env);
     if (p.id === env.selectedId || p.id === env.hoverId) {
       path(p.poly);
@@ -281,6 +297,12 @@ function create(canvas, opts = {}) {
     doc.pieces.forEach((p) => drawPiece(env, p));
     for (const b of env.boards || []) drawBoard(b, b.poly);
     for (const d of env.extra || []) drawExtra(d);
+    for (const tk of (doc.guides && doc.guides.ticks) || []) {
+      ctx.save();
+      ctx.lineWidth = 2 * z; ctx.strokeStyle = tk.color || '#6f695e';
+      ctx.beginPath(); ctx.moveTo(tk.x - tk.dx * 7, tk.y - tk.dy * 7); ctx.lineTo(tk.x + tk.dx * 7, tk.y + tk.dy * 7); ctx.stroke();
+      ctx.restore();
+    }
     if (env.showSeams && doc.guides && doc.guides.notches) for (const n of doc.guides.notches) if (doc.byId[n.piece]) notch(n);
     // 校准尺：50 mm
     const len = 50 / env.mm;
