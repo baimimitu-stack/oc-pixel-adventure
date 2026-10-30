@@ -115,9 +115,11 @@ test('发片两面分开画，对称只在当前这一面生效', () => {
   assert.equal(hair().front.length, 2, '正面镜像出两笔');
   assert.equal(hair().back.length, 0, '背面没被同步');
   f.click('dside', 'back');
-  f.drawShape([[130, 110], [150, 110]]);
-  assert.equal(hair().back.length, 2, '背面单独画');
-  assert.equal(hair().front.length, 2, '正面那两笔还在');
+  f.click('daction', 'newHair');
+  f.drawShape([[100, 220], [300, 220], [300, 300], [100, 300]]);
+  const back = hair();
+  assert.ok(back.onBack, '在背面新长的发片属于背面（落在脑袋后面）');
+  assert.equal(back.front.length, 0, '背面这片还没画笔迹，正面那片的笔迹没串过来');
 });
 
 test('耳朵成对出片，四条配缝长度两两相等', () => {

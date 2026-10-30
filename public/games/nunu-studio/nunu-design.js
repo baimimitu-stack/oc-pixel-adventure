@@ -1306,7 +1306,7 @@ function acceptShape() {
   };
   const visObjs = () => d.objects.filter(o => o.layer === layer && visibleIn(o));
   /** 后脑那两片是单面的图纸原片，笔迹存在 front 里；别的对象照旧按当前这一面存 */
-  const skey = (o) => (o.piece ? 'front' : side);
+  const skey = (o) => (o.piece || o.layer === 'hair' ? 'front' : side);   // 发片是单面的整片毛料，笔迹都存 front；它在哪一面由 onBack 决定
   /** 背面要左右翻着画（从背后看），后脑两片已经是「背后看」的摆法，不翻 */
   const flipped = () => side === 'back' && !(pageMode() && layer === 'face');
   const mir = () => mirrorBox ? mirrorBox.checked : false;

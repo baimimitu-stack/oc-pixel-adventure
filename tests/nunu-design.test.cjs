@@ -96,8 +96,9 @@ test('彩绘只写在当前这一面，背面不跟着同步', () => {
   assert.equal(hair().back.length, 0, '背面没有被同步画上');
   app.click('dside', 'back');
   app.drawStroke([[150, 110], [250, 110]]);
-  assert.equal(hair().back.length, 1, '切到背面后画的笔迹留在背面');
-  assert.equal(hair().front.length, 1, '正面那笔还在，没有丢');
+  assert.equal(hair().front.length, 1, '发片是单面的整片毛料：正面那片在背面视图里是看不见的，背面画的笔迹不会落到它身上');
+  assert.equal(hair().back.length, 0, '发片不存「背面笔迹」');
+  assert.ok(!hair().onBack, '正面那片没有被挪到背面');
   // 整片涂色也只涂当前面
   app.click('dside', 'front');
   const beforeColor = hair().backColor;
