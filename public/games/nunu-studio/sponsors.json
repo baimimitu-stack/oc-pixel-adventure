@@ -1,5 +1,10 @@
 {
   "ownerWechat": "",
+  "admin": {
+    "name": "shenmimimitu",
+    "salt": "e6d0d9a6d80720e7ac4389f47adaba1f",
+    "hash": "69517404941cb8daa4ce7af91373e41970b37dd392eae24502efbee7a84ff74e"
+  },
   "joined": [],
   "thanks": [],
   "notices": []
